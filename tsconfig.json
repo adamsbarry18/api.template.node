@@ -1,0 +1,28 @@
+{
+   "compilerOptions": {
+      "lib": [
+         "es2021"
+      ],
+      "target": "es2021",
+      "module": "commonjs",
+      "moduleResolution": "node",
+      "outDir": "./dist", // Dossier de sortie JS
+      "rootDir": "./src", // Dossier racine TS
+      "emitDecoratorMetadata": true,
+      "experimentalDecorators": true,
+      "sourceMap": true,
+
+      "esModuleInterop": true, // Permet l'interopérabilité avec les modules CommonJS
+      "skipLibCheck": true, // Évite la vérification de types dans les .d.ts
+      "forceConsistentCasingInFileNames": true, // Assure la cohérence de la casse des fichiers
+      "resolveJsonModule": true, // Permet d'importer des fichiers JSON
+      "declaration": true, // Génère les fichiers .d.ts (utile pour les bibliothèques)
+
+      "baseUrl": ".", // Nécessaire pour les path aliases
+      "paths": {
+          "@/*": ["src/*"] // Alias pour les imports (ex: @/config -> src/config)
+      }
+    },
+    "include": ["src/**/*", "tests/e2e/health.test.ts"], // Inclut tous les fichiers dans src
+    "exclude": ["node_modules", "dist", "tests"] // Exclut ces dossiers
+}

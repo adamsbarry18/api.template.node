@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  # Service API (votre application)
+  api:
+    build:
+      context: .
+      target: dependencies # Utilise une étape du Dockerfile pour installer les dépendances
+    container_name: mon-projet-api-dev
+    command: npm run dev # Lance le serveur de développement
+    volumes:
+      - ./src:/usr/src/app/src # Monte le code source pour le hot-reloading
+      - ./prisma:/usr/src/app/prisma # Monte le schéma prisma
+      # Volume nommé pour node_modules pour éviter les conflits avec le système hôte
+      - node_modules_volume:/usr/src/app/node_modules
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}" # Mappe le port de l'app
+      # Port de débogage si nécessaire: - "9229:9229"
+    env_file:
+      - .env # Charge les variables d'environnement
+    depends_on:
+      - postgres # S'assure que la DB est démarrée avant l'API
+      - redis    # S'assure que Redis est démarré avant l'API
+    networks:
+      - backend_network
+
+  # Service Base de Données PostgreSQL
+  postgres:
+    image: postgres:15-alpine # Utilisez une version récente
+    container_name: postgres-dev
+    environment:
+      POSTGRES_USER: ${DB_USER:-user} # Récupère depuis .env ou utilise 'user'
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password} # Récupère depuis .env ou utilise 'password'
+      POSTGRES_DB: ${DB_NAME:-mydatabase} # Récupère depuis .env ou utilise 'mydatabase'
+    ports:
+      - "${DB_PORT:-5432}:5432" # Mappe le port Postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # Volume pour la persistance des données
+    networks:
+      - backend_network
+    healthcheck: # Vérifie que Postgres est prêt
+        test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-user} -d ${DB_NAME:-mydatabase}"]
+        interval: 10s
+        timeout: 5s
+        retries: 5
+
+  # Service Cache Redis
+  redis:
+    image: redis:7-alpine # Utilisez une version récente
+    container_name: redis-dev
+    ports:
+      - "${REDIS_PORT:-6379}:6379" # Mappe le port Redis
+    volumes:
+      - redis_data:/data # Volume pour la persistance (si nécessaire)
+    networks:
+      - backend_network
+    healthcheck: # Vérifie que Redis est prêt
+        test: ["CMD", "redis-cli", "ping"]
+        interval: 10s
+        timeout: 5s
+        retries: 5
+
+# Volumes nommés pour la persistance
+volumes:
+  postgres_data:
+  redis_data:
+  node_modules_volume: # Garde node_modules dans le conteneur
+
+# Réseau partagé pour les conteneurs
+networks:
+  backend_network:
+    driver: bridge
