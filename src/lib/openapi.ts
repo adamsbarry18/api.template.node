@@ -51,17 +51,11 @@ const options: Options = {
       // Schéma de sécurité pour l'authentification JWT Bearer
       securitySchemes: {
         bearerAuth: {
-          type: 'http', // Type HTTP pour l'authentification
-          scheme: 'bearer', // Schéma Bearer
-          bearerFormat: 'JWT', // Format du token
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
           description: 'Entrez votre token JWT précédé de "Bearer " (ex: Bearer eyJ...)',
         },
-        // Ajoutez d'autres schémas de sécurité si nécessaire (ex: apiKey)
-        // apiKeyAuth: {
-        //   type: 'apiKey',
-        //   in: 'header', // ou 'query' ou 'cookie'
-        //   name: 'X-API-KEY',
-        // },
       },
       // Schémas de données réutilisables (DTOs, modèles de réponse/erreur)
       schemas: {
@@ -109,24 +103,15 @@ const options: Options = {
         bearerAuth: [], // Référence le schéma 'bearerAuth' défini ci-dessus
       },
     ],
-    // Optionnel: Définir des tags pour organiser les routes dans Swagger UI
-    tags: [
-      { name: 'Auth', description: "Opérations liées à l'authentification" },
-      { name: 'Users', description: 'Gestion des utilisateurs' },
-      // Ajoutez d'autres tags pour vos modules
-      // { name: 'Products', description: 'Gestion des produits' },
-    ],
   },
   // Chemins vers les fichiers contenant les annotations JSDoc
   // Utiliser path.resolve pour des chemins plus robustes
   apis: [
-    // Chemin vers les contrôleurs (si vous utilisez les décorateurs et JSDoc sur les méthodes)
-    path.resolve(process.cwd(), 'src/modules/**/*.controller.ts'),
-    // Chemin vers les fichiers de routes (si vous utilisez des routeurs Express standard et JSDoc sur les définitions de route)
-    path.resolve(process.cwd(), 'src/modules/**/*.routes.ts'),
+    // path.resolve(process.cwd(), 'src/modules/**/*.services.ts'),
+    path.resolve(process.cwd(), 'src/modules/**/*.router.ts'),
     // Chemin vers les types/DTOs si vous définissez des schémas OpenAPI via JSDoc (@openapi)
-    path.resolve(process.cwd(), 'src/modules/**/*.types.ts'),
-    path.resolve(process.cwd(), 'src/common/types/**/*.ts'),
+    // path.resolve(process.cwd(), 'src/modules/**/*.types.ts'),
+    // path.resolve(process.cwd(), 'src/common/types/**/*.ts'),
     // Il est moins courant de scanner les fichiers d'erreurs, préférez définir ErrorResponse dans components.schemas
     // path.resolve(process.cwd(), 'src/common/errors/*.ts'),
   ],

@@ -38,8 +38,6 @@ export function registerRoutes(
     return;
   }
 
-  logger.info(`Registering routes for controller ${ControllerClass.name}...`);
-
   routes.forEach((routeMeta: RouteMetadataArgs) => {
     if (!routeMeta.method || !routeMeta.path || !routeMeta.handlerName) {
       logger.warn(
@@ -117,9 +115,6 @@ export function registerRoutes(
     // Enregistrement de la route
     try {
       router[routeMeta.method](routeMeta.path, ...methodMiddlewares);
-      logger.info(
-        `  Registered: ${routeMeta.method.toUpperCase()} ${routeMeta.path} -> ${ControllerClass.name}.${String(routeMeta.handlerName)}`,
-      );
     } catch (error) {
       logger.error(
         error,

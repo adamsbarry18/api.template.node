@@ -1,4 +1,9 @@
-import { Strategy as JwtStrategy, ExtractJwt, StrategyOptions } from 'passport-jwt';
+import {
+  Strategy as JwtStrategy,
+  ExtractJwt,
+  StrategyOptions,
+  VerifiedCallback,
+} from 'passport-jwt';
 import passport from 'passport';
 import config from '.';
 import { NextFunction } from '@/common/http';
@@ -9,27 +14,38 @@ import { IsNull } from 'typeorm';
 import { AppDataSource } from '@/database/data-source';
 import { User } from '@/modules/users/models/users.entity';
 import { Request, Response } from '@/common/http';
+import { AuthService } from '@/modules/auth/services/auth.services';
 
 const options: StrategyOptions = {
-  jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(), // Extrait le token du header 'Authorization: Bearer <token>'
+  jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
   secretOrKey: config.JWT_SECRET,
-  // issuer: 'optional: your issuer', // Optionnel: si vous définissez un issuer lors de la signature
+  passReqToCallback: true,
 };
+
+const authService = new AuthService();
 
 export const configurePassport = (): void => {
   passport.use(
-    new JwtStrategy(options, async (payload, done) => {
+    new JwtStrategy(options, async (req: Request, payload: any, done: VerifiedCallback) => {
+      const rawToken = ExtractJwt.fromAuthHeaderAsBearerToken()(req as any);
+
       try {
-        const userId = payload.sub;
-        if (!userId || typeof userId !== 'number') {
-          logger.warn('Invalid JWT payload: missing or invalid "sub" (userId).');
-          return done(null, false, { message: 'Invalid token payload' });
+        // 1. Vérifier si le token est invalidé dans Redis
+        if (await authService.isTokenInvalidated(rawToken)) {
+          logger.warn(
+            `JWT Auth rejected: Token is invalidated (blacklisted). Token starts with ${rawToken?.substring(0, 10)}...`,
+          );
+          return done(null, false, { message: 'Token has been invalidated (logout).' });
         }
 
-        // Utiliser le Repository TypeORM pour chercher l'utilisateur
+        // 2. Vérifier le payload
+        const userId = payload.id;
+        if (!userId || typeof userId !== 'number') {
+          logger.warn('Invalid JWT payload: missing or invalid "id" field.');
+          return done(null, false, { message: 'Invalid token payload structure.' });
+        }
         const userRepository = AppDataSource.getRepository(User);
         const user = await userRepository.findOne({
-          // Sélectionner les champs nécessaires pour req.user, **incluant level**
           select: [
             'id',
             'uid',
@@ -39,22 +55,31 @@ export const configurePassport = (): void => {
             'level',
             'internal',
             'language',
-            // Exclure 'password', 'deletedAt', 'authorisationOverrides' etc.
+            'color',
+            'preferences',
+            'passwordUpdatedAt',
+            'passwordStatus',
+            'internalLevel',
+            'createdAt',
+            'updatedAt',
+            'authorisationOverrides',
+            'permissionsExpireAt',
           ],
           where: {
             id: userId,
-            deletedAt: IsNull(), // Vérifier soft delete
+            deletedAt: IsNull(),
           },
-          // Charger d'autres relations si nécessaire pour les permissions plus tard
-          // relations: ['roles'] // Si vous aviez une relation roles
         });
 
+        // 4. Retourner le résultat
         if (user) {
-          // Important : S'assurer que l'objet retourné ici correspond bien à Express.User étendu
-          return done(null, user as Express.User);
+          // Optionnel mais utile : Attacher le token brut à req.user
+          const userWithToken = user as any & { authToken: string | null };
+          userWithToken.authToken = rawToken;
+          return done(null, userWithToken);
         } else {
           logger.warn(`User not found or deleted for ID ${userId} during JWT auth.`);
-          return done(null, false, { message: 'User not found or invalid' });
+          return done(null, false, { message: 'User associated with token not found or invalid.' });
         }
       } catch (error) {
         logger.error(error, 'Error during JWT strategy execution.');
@@ -62,7 +87,9 @@ export const configurePassport = (): void => {
       }
     }),
   );
-  logger.info('Passport JWT strategy configured.');
+  logger.info(
+    'Passport JWT strategy configured (using Authorization: Bearer and Redis invalidation check).',
+  );
 };
 
 /**

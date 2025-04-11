@@ -1,5 +1,10 @@
+// src/modules/users/models/users.types.ts
+
+import { PermissionsInputMap } from '../../authorisations/authorization.types'; // Importer le type
 import { User } from './users.entity';
 
+// SecurityLevel, PasswordStatus, CrudAction, AuthorisationRule (inchangés)
+// ... (enums et types précédents) ...
 export enum SecurityLevel {
   EXTERNAL = 0,
   READER = 1,
@@ -7,32 +12,22 @@ export enum SecurityLevel {
   INTEGRATOR = 4,
   ADMIN = 5,
 }
-
-// Enum pour le statut du mot de passe (doit correspondre à l'entité)
 export enum PasswordStatus {
   ACTIVE = 'ACTIVE',
   VALIDATING = 'VALIDATING',
   EXPIRED = 'EXPIRED',
 }
-
-// Actions CRUD communes (vous pouvez définir d'autres actions spécifiques)
-export enum CrudAction {
+export enum Action {
   CREATE = 'create',
   READ = 'read',
-  UPDATE = 'write', // 'write' correspond souvent à update dans les flags
-  DELETE = 'delete', // Nom d'action potentiel, à vérifier dans vos flags
+  UPDATE = 'write',
+  DELETE = 'delete',
   EXECUTE = 'execute',
-  // Ajoutez d'autres actions si nécessaire ('list', 'publish', etc.)
 }
-
-// Type pour les règles d'autorisation passées au décorateur
 export type AuthorisationRule =
   | { level: SecurityLevel; feature?: never; action?: never }
-  | { level?: never; feature: string; action: CrudAction | string };
-
-// --- DTOs (Data Transfer Objects) ---
-
-export type CreateUserInput = Omit<
+  | { level?: never; feature: string; action: Action | string };
+type UserBaseDto = Omit<
   User,
   | 'id'
   | 'createdAt'
@@ -40,48 +35,32 @@ export type CreateUserInput = Omit<
   | 'deletedAt'
   | 'passwordUpdatedAt'
   | 'password'
+  | 'authorisationOverrides' // Remplacé par 'permissions'
+  // Méthodes TypeORM/BaseEntity
   | 'comparePassword'
   | 'hashPasswordOnInsert'
-  | 'hashPasswordOnUpdate'
   | 'hasId'
   | 'save'
   | 'remove'
   | 'softRemove'
   | 'recover'
   | 'reload'
-> & {
+  // Méthode personnalisée
+  | 'toApi'
+>;
+
+// Input pour la création
+export type CreateUserInput = UserBaseDto & {
   password: string;
-  authorisationOverrides?: string | null;
-  permissionsExpireAt?: Date | null | string;
+  permissions?: PermissionsInputMap | null;
+  permissionsExpireAt?: Date | string | null;
 };
-export type UpdateUserInput = Partial<
-  Omit<
-    User,
-    | 'id'
-    | 'uid'
-    | 'email'
-    | 'createdAt'
-    | 'updatedAt'
-    | 'deletedAt'
-    | 'passwordUpdatedAt'
-    | 'password'
-    | 'comparePassword'
-    | 'hashPasswordOnInsert'
-    | 'hashPasswordOnUpdate'
-    | 'hasId'
-    | 'save'
-    | 'remove'
-    | 'softRemove'
-    | 'recover'
-    | 'reload'
-  >
-> & {
+export type UpdateUserInput = Partial<Omit<UserBaseDto, 'email' | 'uid'>> & {
   password?: string;
-  authorisationOverrides?: string | null;
-  permissionsExpireAt?: Date | null | string;
+  permissions?: PermissionsInputMap | null;
+  permissionsExpireAt?: Date | string | null;
 };
 
-// D'abord, créer un type de base sans les champs sensibles ET les champs de date originaux
 type UserBaseForApi = Omit<
   User,
   | 'password'
@@ -89,22 +68,18 @@ type UserBaseForApi = Omit<
   | 'authorisationOverrides'
   | 'comparePassword'
   | 'hashPasswordOnInsert'
-  | 'hashPasswordOnUpdate'
   | 'hasId'
   | 'save'
   | 'remove'
   | 'softRemove'
   | 'recover'
   | 'reload'
-  | 'toApi' // Exclure explicitement la méthode toApi
-  // Omettre aussi les champs de date pour éviter les conflits de type
+  | 'toApi'
   | 'createdAt'
   | 'updatedAt'
   | 'passwordUpdatedAt'
   | 'permissionsExpireAt'
 >;
-
-// Ensuite, ajouter les champs de date avec le type string souhaité
 export type UserApiResponse = UserBaseForApi & {
   createdAt: string | null;
   updatedAt: string | null;

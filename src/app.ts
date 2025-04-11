@@ -2,66 +2,70 @@ import os from 'os';
 import express, { Express, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import passport from 'passport';
+import passport from 'passport'; // Import Passport
 import swaggerUi from 'swagger-ui-express';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 
-// Utilisation des types étendus Request/Response
-import { Request, Response } from './common/http';
-import config from './config';
-import logger from './lib/logger';
-import { errorHandler } from './common/middleware/errorHandler';
-import { NotFoundError } from './common/errors/httpErrors';
-import swaggerSpec from './lib/openapi';
-import { configurePassport } from './config/passport';
-import { jsendMiddleware } from './common/middleware/JSend';
-import apiRouter from './api';
-import jwtAuthentication from './common/middleware/jwtAuthentication';
+// Types et Configuration
+import { Request, Response } from './common/http'; // Vos types étendus
+import config from '@/config';
+import logger from '@/lib/logger';
+import swaggerSpec from '@/lib/openapi'; // Ou './lib/swagger' selon le nom de fichier réel
 
-const insecurePaths = [/\/api\/v1\/login/, /\/api\/v1\/password/];
+// Middlewares et Gestionnaires
+import { errorHandler } from '@/common/middleware/errorHandler';
+import { jsendMiddleware } from '@/common/middleware/JSend'; // Middleware JSend
+import { configurePassport } from '@/config/passport'; // Configuration de Passport JWT
 
+// Routeur API Principal
+import apiRouter from '@/api'; // Importe le routeur défini dans api/index.ts
+
+// Erreurs HTTP
+import { NotFoundError } from '@/common/errors/httpErrors';
+
+// Constantes
 const HOSTNAME = os.hostname();
+// const insecurePaths = [...] // N'est plus nécessaire ici, géré par l'absence de @authorize sur les routes publiques
 
 // Création de l'application Express
 const app: Express = express();
 
-// --- Configuration des Middlewares ---
+// --- Configuration des Middlewares Essentiels ---
 
-// Désactiver l'en-tête X-Powered-By pour des raisons de sécurité
-app.disable('x-powered-by');
+app.disable('x-powered-by'); // Sécurité
+app.use(helmet()); // Sécurité (Headers HTTP)
 
-// Sécurité : Helmet (En-têtes de sécurité)
-app.use(helmet());
-
-// CORS : Contrôle les accès cross-origin
+// CORS (Cross-Origin Resource Sharing)
 app.use(
   cors({
-    origin: config.CORS_ORIGIN,
+    origin: config.CORS_ORIGIN, // Configurer les origines autorisées
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    // IMPORTANT: 'Authorization' doit être autorisé pour les Bearer tokens
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   }),
 );
 
-// Performance : Compression des réponses
-app.use(compression());
+app.use(compression()); // Performance (Compression Gzip)
+app.use(cookieParser()); // Parsing des Cookies
 
-// Parsing : Cookies
-app.use(cookieParser());
-
-// Parsing : Body (JSON et URL-encoded)
-const bodyLimit = '5mb';
+// Parsing du Corps des Requêtes (Body)
+const bodyLimit = '5mb'; // Limite de taille pour JSON et URL-encoded
 app.use(express.json({ limit: bodyLimit }));
 app.use(express.urlencoded({ extended: true, limit: bodyLimit }));
 
-// Logging : Requêtes HTTP (Middleware Personnalisé)
+// --- Middlewares Personnalisés ---
+
+// Logging des Requêtes HTTP
 app.use((req: Request, res: Response, next: NextFunction) => {
+  // (Code du middleware de logging inchangé)
   const start = Date.now();
   const ip = req.ip || req.socket.remoteAddress;
   const { method, originalUrl } = req;
 
   res.on('finish', () => {
+    // Ne pas logger les requêtes pour la doc Swagger elle-même
     if (originalUrl.startsWith('/api-docs')) {
       return;
     }
@@ -86,37 +90,37 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-// Standardisation des réponses : JSend
-// Attache res.jsend.success, res.jsend.fail, res.jsend.error
+// Standardisation des Réponses (JSend)
 app.use(jsendMiddleware);
 
-// Headers personnalisés
+// Headers Personnalisés (Server, Env, Version)
 app.use((req: Request, res: Response, next: NextFunction) => {
   res.header('X-Server', HOSTNAME);
   res.header('X-Env', config.NODE_ENV || 'development');
-  // Récupérer la version depuis package.json serait mieux
-  res.header('X-App-Version', process.env.npm_package_version || 'local');
+  res.header('X-App-Version', process.env.npm_package_version || 'local'); // Version depuis package.json
   next();
 });
 
-// Authentification : Passport
-configurePassport();
-app.use(passport.initialize());
+// --- Initialisation de l'Authentification (Passport) ---
+configurePassport(); // Configure la stratégie JWT (maintenant avec Bearer et check Redis)
+app.use(passport.initialize()); // Initialise Passport pour chaque requête
 
-// --- Routes ---
+// --- Définition des Routes ---
 
 // Documentation API (Swagger/OpenAPI)
 app.use(
   '/api-docs',
-  swaggerUi.serve,
+  swaggerUi.serve, // Sert les fichiers statiques de Swagger UI
   swaggerUi.setup(swaggerSpec, {
-    customSiteTitle: 'API Documentation',
+    // Utilise la spécification générée
+    customSiteTitle: 'API Documentation', // Titre de la page
+    // explorer: true, // Optionnel: afficher la barre d'exploration
   }),
 );
 
-// Route racine (Health Check / Statut)
-// Utilise res.jsend.success
+// Route Racine (Health Check / Statut)
 app.get('/', (req: Request, res: Response) => {
+  // Utilise la réponse standardisée JSend
   res.status(200).jsend.success({
     message: `API is running in ${config.NODE_ENV} mode`,
     timestamp: new Date().toISOString(),
@@ -125,18 +129,16 @@ app.get('/', (req: Request, res: Response) => {
   });
 });
 
-// Montage du routeur API principal (/api/v1)
-// Note: L'exemple utilisait un middleware JWT spécifique. Ici, on suppose que
-// les stratégies Passport configurées dans configurePassport() gèrent l'authentification
-// et que les middlewares d'autorisation sont appliqués dans apiRouter ou ses sous-routes.
-
-const jwtMiddleware = (jwtAuthentication(config.JWT_SECRET) as any).unless({ path: insecurePaths });
+// --- Montage du Routeur API Principal ---
+// Monte toutes les routes définies dans './api/index.ts' sous le préfixe '/api/v1'
+// !! PAS de middleware d'authentification global appliqué ici !!
+// L'authentification est gérée au niveau de chaque route via les décorateurs et `registerRoutes`
 app.use('/api/v1', apiRouter);
 
 // --- Gestion Finale des Erreurs ---
 
 // 404 Handler: Gère les routes non trouvées
-// Utilise res.jsend.error via le errorHandler global
+// Ce middleware est atteint si aucune route précédente n'a correspondu
 app.use((req: Request, res: Response, next: NextFunction) => {
   const error = new NotFoundError(
     `The requested resource was not found on this server: ${req.method} ${req.originalUrl}`,
@@ -145,8 +147,8 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 // Gestionnaire d'Erreurs Global: Le dernier middleware
-// Utilise maintenant res.jsend.error grâce aux modifications précédentes
-app.use(errorHandler);
+// Il attrape toutes les erreurs passées via next(error)
+app.use(errorHandler); // Utilise votre gestionnaire d'erreurs personnalisé
 
-// Exporter l'instance `app` configurée
+// Exporter l'instance `app` configurée pour le serveur principal (ex: src/server.ts)
 export default app;
