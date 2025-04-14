@@ -11,7 +11,7 @@ import cookieParser from 'cookie-parser';
 import { Request, Response } from './common/http';
 import config from '@/config';
 import logger from '@/lib/logger';
-import swaggerSpec from '@/lib/openapi';
+import swaggerSpec from '@/lib/swagger/openapi';
 
 // Middlewares et Gestionnaires
 import { errorHandler } from '@/common/middleware/errorHandler';
@@ -112,9 +112,14 @@ app.use(
   '/api-docs',
   swaggerUi.serve, // Sert les fichiers statiques de Swagger UI
   swaggerUi.setup(swaggerSpec, {
-    // Utilise la spécification générée
-    customSiteTitle: 'API Documentation', // Titre de la page
-    // explorer: true, // Optionnel: afficher la barre d'exploration
+    customSiteTitle: 'API Documentation',
+    swaggerOptions: {
+      persistAuthorization: true, // Garde le token entre les refresh
+      defaultModelsExpandDepth: -1, // Masque les schémas par défaut
+      docExpansion: 'none', // Contrôle l'expansion des endpoints
+      filter: true, // Active la barre de recherche/filtre
+    },
+    customCss: '.swagger-ui .topbar { display: none }', // Masque la topbar
   }),
 );
 

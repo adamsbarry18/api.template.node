@@ -1,5 +1,3 @@
-// src/modules/users/user.router.ts
-
 import { BaseRouter } from '@/common/routing/BaseRouter';
 import { UsersService } from './services/users.services';
 import { Request, Response, NextFunction } from '@/common/http';
@@ -28,15 +26,13 @@ export default class UserRouter extends BaseRouter {
   }
 
   /**
-   * @api {get} /api/v1/users Récupérer la liste des utilisateurs
-   * @apiGroup Users
-   * @apiHeader {String} Authorization Bearer Token JWT.
-   * @apiPermission Admin requis
-   * // ... (autres tags apiDoc)
+   * GET /users - Retrieve all users.
+   * @param {Request} req - The incoming request.
+   * @param {Response} res - The response.
+   * @param {NextFunction} next - The next middleware.
    */
   @Get('/users')
-  @authorize({ level: SecurityLevel.ADMIN }) // Seuls les admins peuvent lister tous les utilisateurs
-  // Alternative Feature/Action: @authorize({ feature: 'user', action: CrudAction.READ }) // Si 'READ' sur 'user' signifie lister tous
+  @authorize({ level: SecurityLevel.ADMIN })
   @paginate()
   @sortable(['id', 'email', 'name', 'surname', 'createdAt'])
   @filterable(['level', 'internal', 'email'])
@@ -46,11 +42,10 @@ export default class UserRouter extends BaseRouter {
   }
 
   /**
-   * @api {get} /api/v1/users/me Récupérer l'utilisateur connecté
-   * @apiGroup Users
-   * @apiHeader {String} Authorization Bearer Token JWT.
-   * @apiPermission Utilisateur connecté (Reader ou plus)
-   * // ... (autres tags apiDoc)
+   * GET /users/me - Retrieve the current user's information.
+   * @param {Request} req - The incoming request.
+   * @param {Response} res - The response.
+   * @param {NextFunction} next - The next middleware.
    */
   @Get('/users/me')
   @authorize({ level: SecurityLevel.READER })
@@ -63,11 +58,10 @@ export default class UserRouter extends BaseRouter {
   }
 
   /**
-   * @api {get} /api/v1/users/:id Récupérer un utilisateur par ID
-   * @apiGroup Users
-   * @apiHeader {String} Authorization Bearer Token JWT.
-   * @apiPermission Admin requis
-   * // ... (autres tags apiDoc)
+   * GET /users/:id - Retrieve a user by ID.
+   * @param {Request} req - The incoming request.
+   * @param {Response} res - The response.
+   * @param {NextFunction} next - The next middleware.
    */
   @Get('/users/:id')
   @authorize({ level: SecurityLevel.ADMIN })
@@ -77,11 +71,10 @@ export default class UserRouter extends BaseRouter {
   }
 
   /**
-   * @api {post} /api/v1/users Créer un nouvel utilisateur
-   * @apiGroup Users
-   * @apiHeader {String} Authorization Bearer Token JWT.
-   * @apiPermission Admin requis
-   * // ... (autres tags apiDoc)
+   * POST /users - Create a new user.
+   * @param {Request} req - The incoming request.
+   * @param {Response} res - The response.
+   * @param {NextFunction} next - The next middleware.
    */
   @Post('/users')
   @authorize({ level: SecurityLevel.ADMIN })
@@ -97,11 +90,10 @@ export default class UserRouter extends BaseRouter {
   }
 
   /**
-   * @api {patch} /api/v1/users/:id Mettre à jour un utilisateur (partiel)
-   * @apiGroup Users
-   * @apiHeader {String} Authorization Bearer Token JWT.
-   * @apiPermission Utilisateur modifiant ses propres informations OU Admin
-   * // ... (autres tags apiDoc)
+   * PATCH /users/:id - Update a user.
+   * @param {Request} req - The incoming request.
+   * @param {Response} res - The response.
+   * @param {NextFunction} next - The next middleware.
    */
   @Patch('/users/:id')
   @authorize({ level: SecurityLevel.USER })
@@ -118,11 +110,10 @@ export default class UserRouter extends BaseRouter {
   }
 
   /**
-   * @api {delete} /api/v1/users/:id Supprimer un utilisateur
-   * @apiGroup Users
-   * @apiHeader {String} Authorization Bearer Token JWT.
-   * @apiPermission Admin requis
-   * // ... (autres tags apiDoc)
+   * DELETE /users/:id - Delete a user.
+   * @param {Request} req - The incoming request.
+   * @param {Response} res - The response.
+   * @param {NextFunction} next - The next middleware.
    */
   @Delete('/users/:id')
   @authorize({ level: SecurityLevel.ADMIN })
@@ -131,7 +122,6 @@ export default class UserRouter extends BaseRouter {
     if (req.user?.id === userIdToDelete) {
       return next(new ForbiddenError('Deleting your own account via the API is not permitted.'));
     }
-
     await this.pipe(res, req, next, () => this.usersService.delete(userIdToDelete), 204);
   }
 }

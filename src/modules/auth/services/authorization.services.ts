@@ -5,10 +5,10 @@ import {
   FEATURES_BY_NAME,
   featuresProcessedFlagsMap,
   featuresRawFlagsConfigMap,
-} from './features';
-import { SecurityLevel } from '../users/models/users.types';
-import { DecodedAuthorisations, PermissionsInputMap } from './authorization.types';
-import { UserRepository } from '../users/data/users.repository';
+} from '../models/features';
+import { SecurityLevel } from '../../users/models/users.types';
+import { DecodedAuthorisations, PermissionsInputMap } from '../models/authorization.types';
+import { UserRepository } from '../../users/data/users.repository';
 import { NotFoundError } from '@/common/errors/httpErrors';
 
 // Type interne pour représenter les overrides décodés

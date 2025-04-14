@@ -1,6 +1,6 @@
 // src/modules/users/models/users.types.ts
 
-import { PermissionsInputMap } from '../../authorisations/authorization.types'; // Importer le type
+import { PermissionsInputMap } from '../../auth/models/authorization.types'; // Importer le type
 import { User } from './users.entity';
 
 // SecurityLevel, PasswordStatus, CrudAction, AuthorisationRule (inchangés)

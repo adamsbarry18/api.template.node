@@ -1,9 +1,13 @@
 import { Router, RequestHandler } from 'express';
 import { globalMetadataStorage, RouteMetadataArgs } from './metadata.storage';
-import { validateRequest } from '../middleware/validation';
 import { Request, Response, NextFunction } from '../http';
 import logger from '@/lib/logger';
-import { requireAuth, requireLevel, requirePermission } from '../middleware/authentication';
+import {
+  requireAuth,
+  requireLevel,
+  requirePermission,
+  validateRequest,
+} from '../middleware/authentication';
 import {
   parseFiltering,
   parsePagination,
@@ -67,12 +71,11 @@ export function registerRoutes(
     // 1. Authentification & Autorisation
     const authRule = routeMeta.authorization;
     if (authRule) {
-      methodMiddlewares.push(requireAuth); // Toujours requis si @authorize est utilisé
+      methodMiddlewares.push(requireAuth);
 
       if (authRule.level !== undefined) {
-        methodMiddlewares.push(requireLevel(authRule.level)); // Vérification par niveau
+        methodMiddlewares.push(requireLevel(authRule.level));
       } else if (authRule.feature && authRule.action) {
-        // Vérification par permission spécifique (feature/action)
         methodMiddlewares.push(requirePermission(authRule.feature, authRule.action));
       }
     }
@@ -87,7 +90,6 @@ export function registerRoutes(
       methodMiddlewares.push(parsePagination);
     }
     if (routeMeta.sortableFields !== undefined && routeMeta.sortableFields !== false) {
-      // Passe les champs autorisés au middleware si c'est un tableau
       methodMiddlewares.push(parseSorting(routeMeta.sortableFields));
     }
     if (routeMeta.filterableFields !== undefined && routeMeta.filterableFields !== false) {

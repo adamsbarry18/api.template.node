@@ -17,10 +17,10 @@ export default class AuthRouter extends BaseRouter {
   }
 
   /**
-   * @api {post} /api/v1/login Connexion utilisateur
-   * @apiGroup Authentication
-   * @apiPermission none
-   * // ... (autres tags apiDoc)
+   * POST /login - Authenticate a user and return a token.
+   * @param {Request} req The incoming request.
+   * @param {Response} res The response.
+   * @param {NextFunction} next The next middleware.
    */
   @Post('/login')
   async login(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -29,11 +29,10 @@ export default class AuthRouter extends BaseRouter {
   }
 
   /**
-   * @api {delete} /api/v1/logout Déconnexion utilisateur
-   * @apiGroup Authentication
-   * @apiHeader {String} Authorization Bearer Token JWT.
-   * @apiPermission Utilisateur authentifié (n'importe quel niveau)
-   * // ... (autres tags apiDoc)
+   * DELETE /logout - Logout a user by invalidating their token.
+   * @param {Request} req The incoming request.
+   * @param {Response} res The response.
+   * @param {NextFunction} next The next middleware.
    */
   @Delete('/logout')
   @authorize({ level: SecurityLevel.READER })
@@ -59,10 +58,10 @@ export default class AuthRouter extends BaseRouter {
   }
 
   /**
-   * @api {post} /api/v1/password/:code/confirm Confirmer changement MDP
-   * @apiGroup Authentication
-   * @apiPermission none
-   * // ... (autres tags apiDoc)
+   * POST /password/:code/confirm - Confirm a password change.
+   * @param {Request} req The incoming request.
+   * @param {Response} res The response.
+   * @param {NextFunction} next The next middleware.
    */
   @Post('/password/:code/confirm')
   async confirmPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -80,12 +79,10 @@ export default class AuthRouter extends BaseRouter {
   }
 
   /**
-   * @api {post} /api/v1/generate-token Generate Token for User (Admin)
-   * @apiName GenerateToken
-   * @apiGroup Authentication
-   * @apiVersion 1.0.0
-   * @apiPermission Admin User
-   *
+   * POST /token/generate - Generate a new token for a user.
+   * @param {Request} req The incoming request.
+   * @param {Response} res The response.
+   * @param {NextFunction} next The next middleware.
    */
   @Post('/token/generate')
   @authorize({ level: SecurityLevel.ADMIN })
@@ -96,10 +93,10 @@ export default class AuthRouter extends BaseRouter {
   }
 
   /**
-   * @api {post} /api/v1/password/reset Demander réinitialisation MDP
-   * @apiGroup Authentication
-   * @apiPermission none
-   * // ... (autres tags apiDoc)
+   * POST /password/reset - Request a password reset link.
+   * @param {Request} req The incoming request.
+   * @param {Response} res The response.
+   * @param {NextFunction} next The next middleware.
    */
   @Post('/password/reset')
   async requestPasswordReset(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -120,10 +117,10 @@ export default class AuthRouter extends BaseRouter {
   }
 
   /**
-   * @api {post} /api/v1/password/reset/:code/confirm Confirmer réinitialisation MDP
-   * @apiGroup Authentication
-   * @apiPermission none
-   * // ... (autres tags apiDoc)
+   * POST /password/reset/:code/confirm - Confirm a password reset.
+   * @param {Request} req The incoming request.
+   * @param {Response} res The response.
+   * @param {NextFunction} next The next middleware.
    */
   @Post('/password/reset/:code/confirm')
   async confirmPasswordReset(req: Request, res: Response, next: NextFunction): Promise<void> {

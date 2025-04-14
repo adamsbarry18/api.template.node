@@ -1,4 +1,4 @@
-import { SecurityLevel } from '../users/models/users.types';
+import { SecurityLevel } from '@/modules/users/models/users.types';
 
 // Interface pour la config BRUTE d'un flag
 interface RawFlagConfig {

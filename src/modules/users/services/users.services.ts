@@ -26,8 +26,7 @@ import {
   PasswordStatus,
   SecurityLevel,
 } from '../models/users.types';
-import { AuthorisationsService } from '@/modules/authorisations/authorization.services';
-import { AuthService } from '@/modules/auth/services/auth.services';
+import { AuthorisationsService } from '@/modules/auth/services/authorization.services';
 
 const CONFIRM_CODE_EXPIRE_SECONDS = 60 * 60 * 24 * 3; // 3 jours
 const BCRYPT_SALT_ROUNDS = 10;
@@ -44,17 +43,14 @@ function validatePasswordString(password: string): boolean {
 export class UsersService {
   private readonly userRepository: UserRepository;
   private authorisationsService: AuthorisationsService;
-  private authService: AuthService;
 
   // Garder la référence commentée à KeycloakService
   // private keycloakServiceInstance: KeycloakService | null = null;
 
   constructor() {
-    // Adaptez si DI utilisée
-    // Instanciation directe (adaptez si DI)
-    this.userRepository = new UserRepository(/* dataSource */);
+    this.userRepository = new UserRepository();
     this.authorisationsService = new AuthorisationsService();
-    this.authService = new AuthService();
+    this.authorisationsService = new AuthorisationsService();
 
     // --- Bloc Commenté Keycloak (Constructeur) ---
     /* Ne bloque pas le constructeur, la vérification se fera dans les méthodes
@@ -462,8 +458,6 @@ export class UsersService {
       await redis.del(redisKey);
       logger.info(`Password reset successful for user ${userId}`);
 
-      /// await this.authService.invalidatePermissionsCache(id);
-
       return true;
     } catch (error) {
       logger.error(error, `Error resetting password locally for user ${userId}`);
@@ -485,8 +479,6 @@ export class UsersService {
         );
       } else {
         logger.info(`Password status updated to ${status} for user ${userId}.`);
-
-        //  await this.authService.invalidatePermissionsCache(id);
       }
     } catch (error) {
       logger.error(error, `Failed to update password status to ${status} for user ${userId}`);

@@ -25,18 +25,8 @@ const envSchema = z
       .ip({ version: 'v4' })
       .default('0.0.0.0')
       .describe('IP address to bind the server to'),
-    API_URL: z
-      .string()
-      .url()
-      .optional()
-      .describe('Public base URL of the API (for docs, links), e.g., http://localhost:3000'),
-    FRONTEND_URL: z
-      .string()
-      .url()
-      .optional()
-      .describe(
-        'Base URL of the frontend application (for email links), e.g., http://localhost:8080',
-      ),
+    API_URL: z.string().url().optional(),
+    FRONTEND_URL: z.string().url().optional(),
 
     // --- Base de Données (TypeORM) ---
     DB_TYPE: z.enum(['postgres', 'mysql', 'mariadb', 'sqlite', 'mssql']).default('postgres'),

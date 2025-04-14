@@ -14,7 +14,6 @@ logger.info(`Searching for route files using pattern: ${globPattern}`);
 
 let routeFiles: string[] = [];
 try {
-  // Utiliser glob.sync pour trouver tous les fichiers correspondant au pattern
   routeFiles = glob.sync(globPattern, { absolute: true });
 } catch (error) {
   logger.error(error, `Failed to execute glob pattern for route discovery: ${globPattern}`);

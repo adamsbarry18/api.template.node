@@ -10,9 +10,9 @@ import {
   NotFoundError,
 } from '@/common/errors/httpErrors';
 import { UsersService } from '@/modules/users/services/users.services';
-import { AuthorisationsService } from '@/modules/authorisations/authorization.services';
+import { AuthorisationsService } from '@/modules/auth/services/authorization.services';
 import { PasswordStatus, UserApiResponse } from '@/modules/users/models/users.types';
-import { DecodedAuthorisations } from '@/modules/authorisations/authorization.types';
+import { DecodedAuthorisations } from '@/modules/auth/models/authorization.types';
 
 //
 // Constantes pour les clés Redis et durées
