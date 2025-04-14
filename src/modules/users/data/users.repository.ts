@@ -1,9 +1,7 @@
-// src/modules/users/data/users.repository.ts
-
 import { Repository, DataSource, FindOptionsWhere, IsNull, Not, UpdateResult } from 'typeorm';
-import { AppDataSource } from '@/database/data-source'; // Votre DataSource TypeORM configurée
-import { User } from '../models/users.entity'; // Votre Entité User
-import { PasswordStatus } from '../models/users.types'; // Types associés
+import { AppDataSource } from '@/database/data-source';
+import { User } from '../models/users.entity';
+import { PasswordStatus, SecurityLevel } from '../models/users.types';
 
 /**
  * Repository pour l'entité User.
@@ -11,7 +9,6 @@ import { PasswordStatus } from '../models/users.types'; // Types associés
  * en utilisant TypeORM.
  */
 export class UserRepository {
-  // Le repository TypeORM spécifique à l'entité User
   private readonly ormRepository: Repository<User>;
 
   /**
@@ -20,7 +17,6 @@ export class UserRepository {
    * Permet l'injection de dépendances pour les tests.
    */
   constructor(dataSource: DataSource = AppDataSource) {
-    // Obtient le repository pour l'entité User depuis la DataSource
     this.ormRepository = dataSource.getRepository(User);
   }
 
@@ -33,7 +29,7 @@ export class UserRepository {
     return this.ormRepository.findOne({
       where: {
         id,
-        deletedAt: IsNull(), // Ne retourne que les utilisateurs non supprimés
+        deletedAt: IsNull(),
       },
     });
   }
@@ -48,7 +44,6 @@ export class UserRepository {
     return this.ormRepository.findOne({
       where: { id, deletedAt: IsNull() },
       select: [
-        // Sélectionnez tous les champs nécessaires, y compris le mot de passe
         'id',
         'uid',
         'email',
@@ -66,7 +61,7 @@ export class UserRepository {
         'updatedAt',
         'authorisationOverrides',
         'permissionsExpireAt',
-        'password', // Assurez-vous d'inclure explicitement le mot de passe ici
+        'password',
       ],
     });
   }
@@ -79,7 +74,7 @@ export class UserRepository {
   async findByEmail(email: string): Promise<User | null> {
     return this.ormRepository.findOne({
       where: {
-        email: email.toLowerCase().trim(), // Standardisation de l'email
+        email: email.toLowerCase().trim(),
         deletedAt: IsNull(),
       },
     });
@@ -97,7 +92,6 @@ export class UserRepository {
         email: email.toLowerCase().trim(),
         deletedAt: IsNull(),
       },
-      // addSelect: ['password'] // Décommentez si la colonne 'password' est marquée `select: false` dans l'entité
     });
   }
 
@@ -120,7 +114,6 @@ export class UserRepository {
   async findAll(
     options: { skip?: number; take?: number; where?: FindOptionsWhere<User> } = {},
   ): Promise<{ users: User[]; count: number }> {
-    // Ajoute systématiquement le filtre pour les utilisateurs non supprimés
     const whereClause = { ...options.where, deletedAt: IsNull() };
 
     const [users, count] = await this.ormRepository.findAndCount({
@@ -138,7 +131,6 @@ export class UserRepository {
    * @returns True si l'email existe pour un utilisateur actif, false sinon.
    */
   async checkEmailExists(email: string): Promise<boolean> {
-    // Utilisation de `exists` qui peut être légèrement plus performant que `count`
     return this.ormRepository.exists({
       where: {
         email: email.toLowerCase().trim(),
@@ -157,9 +149,9 @@ export class UserRepository {
     return this.ormRepository.findOne({
       where: {
         email: email.toLowerCase().trim(),
-        deletedAt: Not(IsNull()), // Cherche ceux où deletedAt N'EST PAS NULL
+        deletedAt: Not(IsNull()),
       },
-      withDeleted: true, // Important: Inclure les entités soft-deleted dans la recherche
+      withDeleted: true,
     });
   }
 
@@ -194,16 +186,14 @@ export class UserRepository {
     criteria: number | FindOptionsWhere<User>,
     dto: Partial<User>,
   ): Promise<UpdateResult> {
-    // Construire les critères en s'assurant de cibler les actifs
     const whereCriteria: FindOptionsWhere<User> =
       typeof criteria === 'number'
         ? { id: criteria, deletedAt: IsNull() }
         : { ...criteria, deletedAt: IsNull() };
 
-    // Optionnel: Retirer les champs qu'on ne veut JAMAIS mettre à jour via cette méthode générique
-    // delete dto.email;
-    // delete dto.uid;
-    // delete dto.password; // Utiliser updatePasswordAndStatus pour le mot de passe
+    delete dto.email;
+    delete dto.uid;
+    delete dto.password;
 
     return this.ormRepository.update(whereCriteria, dto);
   }
@@ -225,7 +215,7 @@ export class UserRepository {
       {
         password: hashedPassword,
         passwordStatus: status,
-        passwordUpdatedAt: new Date(), // Met à jour la date automatiquement
+        passwordUpdatedAt: new Date(),
       },
     );
   }
@@ -248,23 +238,15 @@ export class UserRepository {
    * @returns Un objet UpdateResult.
    */
   async softDelete(id: number, anonymizedEmail: string): Promise<UpdateResult> {
-    // Utilise .update pour appliquer la suppression logique et l'anonymisation
     return this.ormRepository.update(
       { id, deletedAt: IsNull() },
       {
-        // Cible uniquement les actifs
-        deletedAt: new Date(), // Marque comme supprimé
-        email: anonymizedEmail, // Anonymise l'email
-        authorisationOverrides: null, // Supprime les overrides
-        permissionsExpireAt: null, // Supprime l'expiration
-        // On pourrait aussi vouloir vider d'autres champs sensibles ici si nécessaire
-        // preferences: null,
-        // uid: null, // Garder l'UID peut être utile pour l'historique
+        deletedAt: new Date(),
+        email: anonymizedEmail,
+        authorisationOverrides: null,
+        permissionsExpireAt: null,
       },
     );
-
-    // Alternative avec `softRemove` de TypeORM, mais ne permet pas de mettre à jour d'autres champs en même temps.
-    // return this.ormRepository.softDelete(id); // Met juste deletedAt
   }
 
   /**
@@ -273,9 +255,6 @@ export class UserRepository {
    * @returns Un objet UpdateResult.
    */
   async restore(id: number): Promise<UpdateResult> {
-    // Utilise la méthode intégrée de TypeORM pour restaurer
-    // Attention: ne restaure pas l'email ou les overrides supprimés lors du softDelete.
-    // Une restauration complète nécessiterait plus de logique (ex: trouver l'ancien email ?)
     return this.ormRepository.restore(id);
   }
 
@@ -288,10 +267,8 @@ export class UserRepository {
     return this.ormRepository.exists({ where: { ...where, deletedAt: IsNull() } });
   }
 
-  // --- Ajoutez d'autres méthodes spécifiques si nécessaire ---
-  // Exemple :
-  // async findAdmins(): Promise<User[]> {
-  //   const { users } = await this.findAll({ where: { level: SecurityLevel.ADMIN } });
-  //   return users;
-  // }
+  async findAdmins(): Promise<User[]> {
+    const { users } = await this.findAll({ where: { level: SecurityLevel.ADMIN } });
+    return users;
+  }
 }

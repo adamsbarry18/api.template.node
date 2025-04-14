@@ -63,6 +63,4 @@ export const errorHandler = (err: Error, req: Request, res: Response, next: Next
     logger.warn('res.jsend.error was not available in errorHandler. Sending raw JSON.');
     res.json({ status: 'error', ...errorPayload });
   }
-
-  // next() n'est pas appelé ici car c'est la fin de la chaîne pour cette requête
 };

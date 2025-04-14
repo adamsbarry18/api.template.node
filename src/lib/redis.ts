@@ -2,7 +2,6 @@ import config from '@/config';
 import logger from './logger';
 import { createClient, RedisClientType } from 'redis';
 
-// Construit l'URL de connexion Redis
 const redisUrl = `redis://${config.REDIS_HOST}:${config.REDIS_PORT}`;
 
 let redisClient: RedisClientType;

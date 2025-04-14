@@ -15,10 +15,9 @@ import {
   ForbiddenError,
   InternalServerError,
 } from '@/common/errors/httpErrors';
-import { getRedisClient, redisClient } from '@/lib/redis'; // Client Redis
-import { sendMail } from '@/lib/mailer'; // Service Mailer
+import { getRedisClient, redisClient } from '@/lib/redis';
+import { sendMail } from '@/lib/mailer';
 import { Request } from '@/common/http';
-// Importer le service Keycloak (même s'il est commenté pour l'instant)
 // import { KeycloakService } from '@/lib/keycloak.service';
 import {
   CreateUserInput,
@@ -27,31 +26,25 @@ import {
   PasswordStatus,
   SecurityLevel,
 } from '../models/users.types';
-
-// Import des autres services requis
 import { AuthorisationsService } from '@/modules/authorisations/authorization.services';
 import { AuthService } from '@/modules/auth/services/auth.services';
 
 const CONFIRM_CODE_EXPIRE_SECONDS = 60 * 60 * 24 * 3; // 3 jours
-const BCRYPT_SALT_ROUNDS = 10; // Force de hachage bcrypt
+const BCRYPT_SALT_ROUNDS = 10;
 
-// --- Fonctions Utilitaires Locales ---
 function validatePasswordString(password: string): boolean {
   if (typeof password !== 'string') return false;
   if (password.length < 8) return false;
-  if (!/[a-z]/.test(password)) return false; // minuscule
-  if (!/[A-Z]/.test(password)) return false; // majuscule
-  if (!/[0-9]/.test(password)) return false; // chiffre
-  // eslint-disable-next-line no-useless-escape
-  if (!/[ `!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~]/.test(password)) return false; // spécial
+  if (!/[a-z]/.test(password)) return false;
+  if (!/[A-Z]/.test(password)) return false;
+  if (!/[0-9]/.test(password)) return false;
+  if (!/[ `!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~]/.test(password)) return false;
   return true;
 }
-
-// --- Service Utilisateur ---
 export class UsersService {
   private readonly userRepository: UserRepository;
-  private readonly authorisationsService: AuthorisationsService;
-  private authService!: AuthService; // Pour l'invalidation du cache - Initialisée via setAuthService
+  private authorisationsService: AuthorisationsService;
+  private authService: AuthService;
 
   // Garder la référence commentée à KeycloakService
   // private keycloakServiceInstance: KeycloakService | null = null;
@@ -61,7 +54,7 @@ export class UsersService {
     // Instanciation directe (adaptez si DI)
     this.userRepository = new UserRepository(/* dataSource */);
     this.authorisationsService = new AuthorisationsService();
-    // this.authService = new AuthService(); // Supprimé - Sera injecté via setAuthService
+    this.authService = new AuthService();
 
     // --- Bloc Commenté Keycloak (Constructeur) ---
     /* Ne bloque pas le constructeur, la vérification se fera dans les méthodes
@@ -78,36 +71,27 @@ export class UsersService {
     // --- Fin Bloc Commenté ---
   }
 
-  // Méthode pour injecter AuthService après l'instanciation
-  public setAuthService(authService: AuthService): void {
-    this.authService = authService;
-  }
-
-  /** Transformation vers UserApiResponse (inchangée) */
-  private mapToApiResponse(user: User | null): UserApiResponse | null {
+  /** Transformation vers UserApiResponse */
+  mapToApiResponse(user: User | null): UserApiResponse | null {
     return user ? user.toApi() : null;
   }
 
-  /** findById (inchangée) */
   async findById(id: number): Promise<UserApiResponse> {
     const user = await this.userRepository.findById(id);
     if (!user) throw new NotFoundError(`User with id ${id} not found.`);
     return this.mapToApiResponse(user)!;
   }
 
-  /** findByEmail (inchangée) */
   async findByEmail(email: string): Promise<UserApiResponse> {
     const user = await this.userRepository.findByEmail(email);
     if (!user) throw new NotFoundError(`User with email ${email} not found.`);
     return this.mapToApiResponse(user)!;
   }
 
-  /** findByEmailForAuth (inchangée) */
   async findByEmailForAuth(email: string): Promise<User | null> {
     return await this.userRepository.findByEmailWithPassword(email);
   }
 
-  /** findAll (inchangée) */
   async findAll(options?: { requestingUser?: Request['user'] }): Promise<UserApiResponse[]> {
     const where: FindOptionsWhere<User> = {};
     if (options?.requestingUser && !options.requestingUser.internal) {
@@ -117,15 +101,12 @@ export class UsersService {
     return users.map((user) => this.mapToApiResponse(user)!);
   }
 
-  /** Crée un nouvel utilisateur ou réactive un utilisateur supprimé. Utilise l'encodage des permissions. */
   async create(
-    input: CreateUserInput, // Accepte `permissions` objet
+    input: CreateUserInput,
     options?: { requestingUser?: Request['user'] },
   ): Promise<UserApiResponse> {
     const { password, email, permissions, permissionsExpireAt, ...restData } = input;
     const lowerCaseEmail = email.toLowerCase().trim();
-
-    // Validations métier (inchangées)
     if (!validatePasswordString(password)) {
       throw new BadRequestError('Password does not meet complexity requirements.');
     }
@@ -133,7 +114,6 @@ export class UsersService {
     if (restData.internal && !isInternalRequestor) {
       throw new ForbiddenError('Cannot create internal user without being internal.');
     }
-    // Vérification d'email existant AVANT de chercher les supprimés
     const existingActiveUser = await this.userRepository.findByEmail(lowerCaseEmail);
     if (existingActiveUser) {
       throw new ConflictError('Email address is already in use by an active user.');
@@ -141,8 +121,6 @@ export class UsersService {
 
     const deletedUser = await this.userRepository.findDeletedByEmail(lowerCaseEmail);
     const hashedPassword = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
-
-    // Encodage des Permissions
     const encodedOverrides = this.authorisationsService.encodePermissionsToString(
       permissions ?? {},
     );
@@ -151,7 +129,6 @@ export class UsersService {
       let userEntity: User;
       let kcUserId: string | undefined;
 
-      // --- Bloc Commenté Keycloak (Création) ---
       /* Tenter de créer l'utilisateur dans Keycloak d'abord (si activé)
          if (this.keycloakServiceInstance?.isServiceReady()) {
              try {
@@ -168,8 +145,6 @@ export class UsersService {
                  // throw new InternalServerError(`Keycloak user creation failed: ${kcError.message}`);
              }
          } */
-      // --- Fin Bloc Commenté ---
-
       if (deletedUser) {
         logger.info(
           `Reactivating deleted user with email ${lowerCaseEmail} (ID: ${deletedUser.id})`,
@@ -180,8 +155,8 @@ export class UsersService {
         deletedUser.password = hashedPassword;
         deletedUser.passwordStatus = PasswordStatus.ACTIVE;
         deletedUser.passwordUpdatedAt = new Date();
-        deletedUser.uid = kcUserId ?? deletedUser.uid ?? randomUUID(); // Met à jour avec l'ID Keycloak si créé
-        deletedUser.authorisationOverrides = encodedOverrides; // Utilise la chaîne encodée
+        deletedUser.uid = kcUserId ?? deletedUser.uid ?? randomUUID();
+        deletedUser.authorisationOverrides = encodedOverrides;
         deletedUser.permissionsExpireAt = permissionsExpireAt
           ? dayjs(permissionsExpireAt).toDate()
           : null;
@@ -191,27 +166,22 @@ export class UsersService {
           ...restData,
           email: lowerCaseEmail,
           password: hashedPassword,
-          uid: kcUserId ?? randomUUID(), // Utilise l'ID Keycloak si créé
+          uid: kcUserId ?? randomUUID(),
           passwordStatus: PasswordStatus.ACTIVE,
           passwordUpdatedAt: new Date(),
-          authorisationOverrides: encodedOverrides, // Utilise la chaîne encodée
+          authorisationOverrides: encodedOverrides,
           permissionsExpireAt: permissionsExpireAt ? dayjs(permissionsExpireAt).toDate() : null,
         });
       }
-
-      // Sauvegarde DB locale
       const savedUser = await this.userRepository.save(userEntity);
       logger.info(
         `User ${savedUser.id} ${deletedUser ? 'reactivated' : 'created'} successfully locally.`,
       );
 
-      // Pas besoin d'invalider le cache ici pour une création
-
       return this.mapToApiResponse(savedUser)!;
     } catch (error: any) {
       logger.error(error, `Error during user creation/reactivation for ${lowerCaseEmail}`);
 
-      // --- Bloc Commenté Keycloak (Rollback Création) ---
       /* Si Keycloak a créé l'utilisateur mais la DB locale a échoué, tenter de le supprimer dans Keycloak
          if (kcUserId && this.keycloakServiceInstance?.isServiceReady()) {
              logger.warn(`Rolling back Keycloak user creation for ID ${kcUserId} due to local DB error.`);
@@ -219,12 +189,8 @@ export class UsersService {
                  logger.error(rbError, `Failed to rollback Keycloak user ${kcUserId}`)
              );
          }*/
-      // --- Fin Bloc Commenté ---
 
-      // Gestion erreurs DB spécifiques
       if (error.code === '23505') {
-        // Code PostgreSQL pour violation unique
-        // Tenter de déterminer quel champ a causé la violation (email ou uid ?)
         if (error.detail?.includes('(email)')) {
           throw new ConflictError('Email address already exists.');
         } else if (error.detail?.includes('(uid)')) {
@@ -233,31 +199,26 @@ export class UsersService {
           throw new ConflictError('Unique constraint violation during user creation.');
         }
       }
-      // Relancer une erreur générique si non gérée spécifiquement
       throw error instanceof HttpError ? error : new InternalServerError('Failed to create user.');
     }
   }
-
-  /** Met à jour un utilisateur existant. Utilise l'encodage des permissions et invalide le cache. */
   async update(
     id: number,
-    input: UpdateUserInput, // Accepte `permissions` objet
+    input: UpdateUserInput,
     options?: { requestingUser?: Request['user'] },
   ): Promise<UserApiResponse> {
     const { password, permissions, permissionsExpireAt, ...restData } = input;
-    let permissionsOrExpiryChanged = false; // Flag pour invalidation cache
+    let permissionsOrExpiryChanged = false;
 
-    const user = await this.userRepository.findByIdWithPassword(id); // Récupérer avec le mot de passe pour la comparaison
+    const user = await this.userRepository.findByIdWithPassword(id);
     if (!user) throw new NotFoundError(`User with id ${id} not found.`);
-
-    // Logique de validation des permissions de l'appelant (exemple simple)
     const requestingUser = options?.requestingUser;
     const isSelfUpdate = requestingUser?.id === id;
-    const isAdmin = requestingUser?.level === SecurityLevel.ADMIN; // Ajustez
+    const isAdmin = requestingUser?.level === SecurityLevel.ADMIN;
     if (!isSelfUpdate && !isAdmin) {
       throw new ForbiddenError('You do not have permission to update this user.');
     }
-    // Ajouter des vérifications si un non-admin tente de changer 'level' ou 'internal'
+
     if (!isAdmin && (input.level !== undefined || input.internal !== undefined)) {
       throw new ForbiddenError('You do not have permission to change level or internal status.');
     }
@@ -265,7 +226,6 @@ export class UsersService {
     const updatePayload: Partial<User> = { ...restData };
     let passwordChanged = false;
 
-    // Gestion MàJ Mot de passe (inchangée)
     if (password) {
       if (!validatePasswordString(password))
         throw new BadRequestError('Password does not meet complexity requirements.');
@@ -279,8 +239,6 @@ export class UsersService {
         logger.warn(`User ${id} attempted to update with the same password.`);
       }
     }
-
-    // Gestion MàJ Permissions & Expiration
     if (permissions !== undefined) {
       permissionsOrExpiryChanged = true;
       updatePayload.authorisationOverrides = this.authorisationsService.encodePermissionsToString(
@@ -292,13 +250,13 @@ export class UsersService {
       const expiryDate = permissionsExpireAt ? dayjs(permissionsExpireAt) : null;
       updatePayload.permissionsExpireAt = expiryDate?.isValid() ? expiryDate.toDate() : null;
     }
-    // Vérifier aussi changement de level/internal pour l'invalidation
+
     if (input.level !== undefined && input.level !== user.level) permissionsOrExpiryChanged = true;
     if (input.internal !== undefined && input.internal !== user.internal)
       permissionsOrExpiryChanged = true;
 
     try {
-      /* Mettre à jour Keycloak d'abord (si applicable et si des données pertinentes ont changé)
+      /* Mettre à jour Keycloak d'abord 
          let kcUpdateData: 
          if (restData.name !== undefined || restData.surname !== undefined) {
              kcUpdateData = { name: restData.name, surname: restData.surname };
@@ -317,23 +275,14 @@ export class UsersService {
                    // throw new InternalServerError(`Keycloak user update failed: ${kcError.message}`);
               }
          } */
-
-      // Mise à jour DB locale
       const result = await this.userRepository.update(id, updatePayload);
       if (result.affected === 0)
         throw new NotFoundError(
           `User with id ${id} not found during update (or no changes applied).`,
         );
 
-      // Invalidation Cache si nécessaire
-      if (permissionsOrExpiryChanged) {
-        await this.authService.invalidatePermissionsCache(id);
-      }
-
       const updatedUser = await this.userRepository.findById(id);
       if (!updatedUser) throw new InternalServerError('Failed to re-fetch user after update.');
-
-      // Envoi email confirmation si nécessaire (inchangé)
       if (passwordChanged && updatedUser.passwordStatus === PasswordStatus.VALIDATING) {
         await this.sendPasswordConfirmationEmail(updatedUser);
       }
@@ -347,8 +296,6 @@ export class UsersService {
       throw error instanceof HttpError ? error : new InternalServerError('Failed to update user.');
     }
   }
-
-  /** updatePreferences (inchangée) */
   async updatePreferences(
     userId: number,
     preferences: Record<string, any> | null,
@@ -361,12 +308,9 @@ export class UsersService {
     return this.mapToApiResponse(updatedUser)!;
   }
 
-  /** resetPreferences (inchangée) */
   async resetPreferences(userId: number): Promise<UserApiResponse> {
     return this.updatePreferences(userId, null);
   }
-
-  /** Supprime (soft delete) un utilisateur et invalide le cache. */
   async delete(id: number): Promise<void> {
     const user = await this.userRepository.findById(id);
     if (!user) throw new NotFoundError(`User with id ${id} not found.`);
@@ -381,28 +325,13 @@ export class UsersService {
                  // Continuer même si la suppression Keycloak échoue ?
             }
        }*/
-
-    // Soft delete local
     const anonymizedEmail = `${user.email}_deleted_${Date.now()}`;
     const result = await this.userRepository.softDelete(id, anonymizedEmail);
-
-    if (result.affected === 0) {
-      logger.warn(`User with id ${id} may have already been deleted.`);
-    } else {
-      logger.info(`User ${id} soft deleted successfully locally.`);
-      // Invalider le cache de permissions après suppression logique
-      await this.authService.invalidatePermissionsCache(id);
-    }
   }
-
-  // --- Méthodes liées au mot de passe (inchangées, sauf resetPasswordWithCode avec commentaire Keycloak) ---
-
-  /** generateRedisCode (inchangée) */
   private generateRedisCode(): string {
     return randomUUID().replace(/-/g, '');
   }
 
-  /** sendPasswordConfirmationEmail (inchangée) */
   async sendPasswordConfirmationEmail(user: User): Promise<void> {
     const redis = redisClient ?? getRedisClient();
     if (!redis) {
@@ -426,7 +355,6 @@ export class UsersService {
     }
   }
 
-  /** confirmPasswordChange (inchangée) */
   async confirmPasswordChange(code: string): Promise<boolean> {
     const redis = redisClient ?? getRedisClient();
     if (!redis) throw new HttpError(503, 'Service temporarily unavailable (Redis)');
@@ -455,7 +383,6 @@ export class UsersService {
     }
   }
 
-  /** sendPasswordResetEmail (inchangée) */
   async sendPasswordResetEmail(email: string, referer?: string): Promise<void> {
     const user = await this.userRepository.findByEmail(email);
     if (!user) {
@@ -484,7 +411,6 @@ export class UsersService {
     }
   }
 
-  /** Réinitialise le mot de passe avec un code. */
   async resetPasswordWithCode(code: string, newPassword: string): Promise<boolean> {
     if (!validatePasswordString(newPassword))
       throw new BadRequestError('Password does not meet complexity requirements.');
@@ -511,7 +437,6 @@ export class UsersService {
 
     const hashedPassword = await bcrypt.hash(newPassword, BCRYPT_SALT_ROUNDS);
 
-    // --- Bloc Commenté Keycloak (Reset Password) ---
     /* Mettre à jour Keycloak d'abord
        if (this.keycloakServiceInstance?.isServiceReady() && user.uid) {
            try {
@@ -524,10 +449,8 @@ export class UsersService {
                 // throw new InternalServerError(`Keycloak password reset failed: ${kcError.message}`);
            }
        }*/
-    // --- Fin Bloc Commenté ---
 
     try {
-      // Mise à jour locale (BDD)
       const result = await this.userRepository.updatePasswordAndStatus(
         userId,
         hashedPassword,
@@ -536,19 +459,14 @@ export class UsersService {
       if (result.affected === 0)
         throw new NotFoundError('User not found during password reset update.');
 
-      await redis.del(redisKey); // Supprimer la clé Redis après succès
+      await redis.del(redisKey);
       logger.info(`Password reset successful for user ${userId}`);
 
-      // --- Invalidation Cache ---
-      // Le changement de mot de passe n'invalide pas les permissions, sauf si le statut passe à ACTIVE
-      // Si le statut était EXPIRED ou VALIDATING, invalider pourrait être pertinent, mais pas critique.
-      // await this.authService.invalidatePermissionsCache(id); // Probablement pas nécessaire ici.
+      /// await this.authService.invalidatePermissionsCache(id);
 
       return true;
     } catch (error) {
       logger.error(error, `Error resetting password locally for user ${userId}`);
-      // Ne pas supprimer la clé Redis ici pour permettre une nouvelle tentative ? C'est discutable.
-      // On la supprime pour éviter une réutilisation accidentelle du code.
       await redis
         .del(redisKey)
         .catch((err) => logger.error(err, `Failed to delete reset key ${redisKey} after DB error`));
@@ -558,7 +476,6 @@ export class UsersService {
     }
   }
 
-  /** Méthode ajoutée pour MàJ Statut MDP (utilisée par AuthService.login) */
   async updatePasswordStatus(userId: number, status: PasswordStatus): Promise<void> {
     try {
       const result = await this.userRepository.update(userId, { passwordStatus: status });
@@ -568,11 +485,8 @@ export class UsersService {
         );
       } else {
         logger.info(`Password status updated to ${status} for user ${userId}.`);
-        // --- Invalidation Cache ---
-        // Si le statut passe à EXPIRED ou VALIDATING, cela peut affecter la connexion,
-        // mais n'affecte généralement pas les permissions directement.
-        // L'invalidation n'est probablement pas critique ici.
-        // await this.authService.invalidatePermissionsCache(id);
+
+        //  await this.authService.invalidatePermissionsCache(id);
       }
     } catch (error) {
       logger.error(error, `Failed to update password status to ${status} for user ${userId}`);

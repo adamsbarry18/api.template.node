@@ -1,11 +1,10 @@
-// src/lib/swagger.ts
 import swaggerJsdoc, { Options, SwaggerDefinition } from 'swagger-jsdoc';
 import path from 'path';
-import config from '@/config'; // Utilise l'alias pour la configuration
-import logger from './logger'; // Logger Pino local (dans src/lib)
 
-// Récupérer la version depuis package.json (optionnel mais propre)
-let apiVersion = '1.0.0'; // Version par défaut
+import config from '@/config';
+import logger from './logger';
+
+let apiVersion = '1.0.0';
 try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const pkg = require(path.resolve(process.cwd(), 'package.json'));
@@ -13,40 +12,42 @@ try {
     apiVersion = pkg.version;
   }
 } catch (error) {
-  logger.warn('Could not read version from package.json for Swagger info.');
+  logger.warn('Impossible de lire la version depuis package.json pour Swagger.');
 }
 
-// Options pour swagger-jsdoc
+//
+// Configuration des options pour swagger-jsdoc
+//
 const options: Options = {
-  // Définition de base de la spécification OpenAPI 3.0
+  // Définition de la spécification OpenAPI 3.0
   definition: {
     openapi: '3.0.0',
     info: {
-      title: 'Mon API Backend', // Adaptez le titre si nécessaire
+      title: 'Mon API Backend', // Titre de l'API (à adapter selon vos besoins)
       version: apiVersion,
-      description: "Documentation de l'API pour le projet backend.", // Adaptez la description
+      description: "Documentation de l'API pour le projet backend.",
       contact: {
         name: 'Équipe de Développement',
-        // url: 'URL du site de support',
-        // email: 'contact@mondomaine.com',
+        // Vous pouvez ajouter url et email si nécessaire :
+        // url: 'https://votresite.com/support',
+        // email: 'contact@votredomaine.com',
       },
-      // license: { // Ajoutez une licence si applicable
+      // license: {
       //   name: 'MIT',
       //   url: 'https://opensource.org/licenses/MIT',
       // },
     },
-    // Définition des serveurs où l'API est hébergée
+    // Serveurs de l'API
     servers: [
       {
-        // Utilise l'URL de l'API depuis la config ou construit une URL locale par défaut
-        url: `${config.API_URL || `http://localhost:${config.PORT}`}/api/v1`, // Inclut le base path /api/v1
+        url: `${config.API_URL || `http://localhost:${config.PORT}`}/api/v1`, // Base path inclus (/api/v1)
         description: `Serveur ${config.NODE_ENV}`,
       },
-      // Ajoutez ici d'autres serveurs (staging, production) si nécessaire
-      // { url: 'https://staging.mondomaine.com/api/v1', description: 'Serveur Staging' },
-      // { url: 'https://api.mondomaine.com/api/v1', description: 'Serveur Production' },
+      // Vous pouvez ajouter d'autres serveurs (staging, production) ici
+      // { url: 'https://staging.votredomaine.com/api/v1', description: 'Serveur Staging' },
+      // { url: 'https://api.votredomaine.com/api/v1', description: 'Serveur Production' },
     ],
-    // Définition des composants réutilisables (schémas, sécurité)
+    // Composants réutilisables (schémas, sécurité, etc.)
     components: {
       // Schéma de sécurité pour l'authentification JWT Bearer
       securitySchemes: {
@@ -57,9 +58,8 @@ const options: Options = {
           description: 'Entrez votre token JWT précédé de "Bearer " (ex: Bearer eyJ...)',
         },
       },
-      // Schémas de données réutilisables (DTOs, modèles de réponse/erreur)
+      // Définition des schémas réutilisables (réponses d'erreur, pagination, etc.)
       schemas: {
-        // Exemple de schéma pour une réponse d'erreur standard
         ErrorResponse: {
           type: 'object',
           properties: {
@@ -68,18 +68,19 @@ const options: Options = {
               example: false,
               description: "Indique si l'opération a échoué",
             },
-            message: { type: 'string', description: "Message d'erreur lisible par l'humain" },
+            message: {
+              type: 'string',
+              description: "Message d'erreur lisible par l'humain",
+            },
             code: {
               type: 'string',
               description: "Code d'erreur applicatif unique (optionnel)",
               example: 'ERR_NOT_FOUND',
             },
-            // data: { type: 'object', nullable: true, description: "Données supplémentaires sur l'erreur (ex: détails de validation)" },
-            // stack: { type: 'string', nullable: true, description: "Stack trace (uniquement en environnement de développement)" },
+            // Vous pouvez ajouter d'autres propriétés comme `data` ou `stack` selon vos besoins
           },
           required: ['success', 'message'],
         },
-        // Exemple de schéma pour la pagination (utilisé dans les réponses de liste)
         PaginationMeta: {
           type: 'object',
           properties: {
@@ -90,73 +91,58 @@ const options: Options = {
           },
         },
         // Ajoutez d'autres schémas réutilisables ici
-        // Vous pouvez aussi définir des schémas directement via JSDoc dans vos fichiers .ts
       },
-      // Vous pouvez aussi définir des paramètres, des réponses, etc. réutilisables ici
-      // parameters: { ... },
-      // responses: { ... }
+      // Vous pouvez également définir ici des paramètres ou réponses communs
     },
-    // Applique la sécurité JWT Bearer à toutes les routes par défaut
-    // Pour rendre une route publique, ajoutez le tag JSDoc `@security []` à sa définition
+    // Appliquer la sécurité JWT Bearer par défaut à toutes les routes
+    // Pour rendre une route publique, ajoutez l’annotation JSDoc @security [] dans sa documentation.
     security: [
       {
-        bearerAuth: [], // Référence le schéma 'bearerAuth' défini ci-dessus
+        bearerAuth: [],
       },
     ],
   },
-  // Chemins vers les fichiers contenant les annotations JSDoc
-  // Utiliser path.resolve pour des chemins plus robustes
+  // Chemins vers les fichiers où se trouvent vos annotations JSDoc pour Swagger
   apis: [
-    // path.resolve(process.cwd(), 'src/modules/**/*.services.ts'),
+    // Par convention, on scanne les fichiers de route dans le dossier src/modules
     path.resolve(process.cwd(), 'src/modules/**/*.router.ts'),
-    // Chemin vers les types/DTOs si vous définissez des schémas OpenAPI via JSDoc (@openapi)
+    // Vous pouvez également scanner d'autres fichiers contenant des annotations
+    // path.resolve(process.cwd(), 'src/modules/**/*.services.ts'),
     // path.resolve(process.cwd(), 'src/modules/**/*.types.ts'),
-    // path.resolve(process.cwd(), 'src/common/types/**/*.ts'),
-    // Il est moins courant de scanner les fichiers d'erreurs, préférez définir ErrorResponse dans components.schemas
-    // path.resolve(process.cwd(), 'src/common/errors/*.ts'),
   ],
 };
 
+//
+// Génération de la spécification Swagger
+//
 let swaggerSpec: SwaggerDefinition | null = null;
 
 try {
-  // Générer la spécification Swagger
   const generatedSpec = swaggerJsdoc(options) as SwaggerDefinition;
 
-  // Vérifications de base
   if (!generatedSpec) {
-    throw new Error('Swagger specification generation resulted in undefined object.');
+    throw new Error('La génération de la spécification Swagger a retourné undefined.');
   }
+
   if (!generatedSpec.paths || Object.keys(generatedSpec.paths).length === 0) {
     logger.warn(
-      'Swagger spec generated, but no paths were found. Check JSDoc annotations and `apis` paths in swagger.ts.',
+      'La spécification Swagger a été générée, mais aucun chemin n’a été trouvé. Vérifiez les annotations JSDoc et le chemin défini dans `apis`.',
     );
   } else {
     const pathCount = Object.keys(generatedSpec.paths).length;
-    logger.info(`Swagger specification generated successfully with ${pathCount} path(s).`);
+    logger.info(`Spécification Swagger générée avec succès (${pathCount} chemin(s) trouvé(s)).`);
   }
-
-  // logger.debug(generatedSpec, 'Generated Swagger Spec:'); // Décommentez pour voir le spec complet en mode debug
-
-  // Optionnel: Validation plus poussée du schéma généré
-  // import swaggerValidator from 'swagger-spec-validator';
-  // swaggerValidator.validate(generatedSpec as any, (err, result) => {
-  //    if (err) { logger.error(err, "Swagger validation error (schema level)"); }
-  //    if (result && !result.valid) { logger.warn({ warnings: result.warnings, errors: result.errors }, "Swagger validation issues found"); }
-  // });
 
   swaggerSpec = generatedSpec;
 } catch (error: any) {
-  logger.error(error, 'Failed to generate Swagger specification');
-  // Créer un objet spec de secours en cas d'erreur
+  logger.error(error, 'Échec de la génération de la spécification Swagger');
+  // En cas d'erreur, retourne une spécification de secours
   swaggerSpec = {
     openapi: '3.0.0',
-    info: { title: 'API Docs (Error Generating Spec)', version: apiVersion },
+    info: { title: 'API Docs (Erreur de génération)', version: apiVersion },
     paths: {},
-    servers: options.definition?.servers ?? [], // Garder les serveurs définis
+    servers: options.definition?.servers ?? [],
   };
 }
 
-// Exporter la spécification (ou la version de secours)
-// Utiliser module.exports pour une meilleure compatibilité lors de l'import initial dans app.ts
 export default swaggerSpec;

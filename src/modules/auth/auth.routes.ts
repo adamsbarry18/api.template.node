@@ -1,10 +1,10 @@
 import { BaseRouter } from '@/common/routing/BaseRouter';
 import { Request, Response, NextFunction } from '@/common/http';
-import { Post, Delete, validate, authorize } from '@/common/routing/decorators';
+import { Post, Delete, authorize } from '@/common/routing/decorators';
 import { UnauthorizedError } from '@/common/errors/httpErrors';
+import { SecurityLevel } from '@/modules/users/models/users.types';
 import { AuthService } from './services/auth.services';
 import { UsersService } from '../users/services/users.services';
-import { SecurityLevel } from '../users/models/users.types';
 
 export default class AuthRouter extends BaseRouter {
   private authService: AuthService;
@@ -23,15 +23,9 @@ export default class AuthRouter extends BaseRouter {
    * // ... (autres tags apiDoc)
    */
   @Post('/login')
-  // PAS de @authorize() ici - route publique
   async login(req: Request, res: Response, next: NextFunction): Promise<void> {
-    await this.pipe(
-      res,
-      req,
-      next,
-      () => this.authService.login(req.body.email, req.body.password),
-      200,
-    );
+    const { email, password } = req.body;
+    await this.pipe(res, req, next, () => this.authService.login(email, password), 200);
   }
 
   /**
@@ -42,21 +36,26 @@ export default class AuthRouter extends BaseRouter {
    * // ... (autres tags apiDoc)
    */
   @Delete('/logout')
-  // @authorize({ level: SecurityLevel.EXTERNAL }) // Requiert juste d'être authentifié (level 0 ou plus)
-  // @authorize({ level: SecurityLevel.READER })
+  @authorize({ level: SecurityLevel.READER })
   async logout(req: Request, res: Response, next: NextFunction): Promise<void> {
-    const authHeader = req.headers.authorization;
-    let token: string | null = null;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.substring(7);
-    }
+    const token = req.user?.authToken;
     if (!token) {
-      // Normalement géré par requireAuth déclenché par @authorize, mais double sécurité.
-      return next(
-        new UnauthorizedError('Bearer token missing or malformed in Authorization header.'),
+      this.logger.error(
+        'Logout error: Missing authToken on request after authentication middleware.',
       );
+      return next(new UnauthorizedError('Logout failed due to missing token context.'));
     }
-    await this.pipe(res, req, next, () => this.authService.logout(token), 204);
+
+    await this.pipe(
+      res,
+      req,
+      next,
+      async () => {
+        await this.authService.logout(token);
+        return 'Logout successful';
+      },
+      200,
+    );
   }
 
   /**
@@ -66,15 +65,34 @@ export default class AuthRouter extends BaseRouter {
    * // ... (autres tags apiDoc)
    */
   @Post('/password/:code/confirm')
-  // PAS de @authorize() ici - route publique (sécurisée par le code unique)
   async confirmPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const { code } = req.params;
     await this.pipe(
       res,
       req,
       next,
-      () => this.usersService.confirmPasswordChange(req.params.code),
+      async () => {
+        await this.usersService.confirmPasswordChange(code);
+        res.jsend.success('Password change confirmed successfully.');
+      },
       200,
     );
+  }
+
+  /**
+   * @api {post} /api/v1/generate-token Generate Token for User (Admin)
+   * @apiName GenerateToken
+   * @apiGroup Authentication
+   * @apiVersion 1.0.0
+   * @apiPermission Admin User
+   *
+   */
+  @Post('/token/generate')
+  @authorize({ level: SecurityLevel.ADMIN })
+  async generateTokenForUser(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const { userId } = req.query;
+
+    await this.pipe(res, req, next, async () => this.authService.generateTokenForUser(userId), 200);
   }
 
   /**
@@ -84,17 +102,18 @@ export default class AuthRouter extends BaseRouter {
    * // ... (autres tags apiDoc)
    */
   @Post('/password/reset')
-  // PAS de @authorize() ici - route publique
   async requestPasswordReset(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const { email } = req.body;
+    const referer = req.headers.referer || req.headers.origin;
     await this.pipe(
       res,
       req,
       next,
       async () => {
-        await this.usersService.sendPasswordResetEmail(req.body.email, req.headers.referer);
-        return {
-          message: 'If your email exists in our system, a password reset link has been sent.',
-        };
+        await this.usersService.sendPasswordResetEmail(email, referer);
+        res.jsend.success(
+          'If your email exists in our system, a password reset link has been sent.',
+        );
       },
       200,
     );
@@ -107,13 +126,17 @@ export default class AuthRouter extends BaseRouter {
    * // ... (autres tags apiDoc)
    */
   @Post('/password/reset/:code/confirm')
-  // PAS de @authorize() ici - route publique (sécurisée par le code unique)
   async confirmPasswordReset(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const { code } = req.params;
+    const { password } = req.body;
     await this.pipe(
       res,
       req,
       next,
-      () => this.usersService.resetPasswordWithCode(req.params.code, req.body.password),
+      async () => {
+        await this.usersService.resetPasswordWithCode(code, password);
+        res.jsend.success('Password has been successfully reset.');
+      },
       200,
     );
   }

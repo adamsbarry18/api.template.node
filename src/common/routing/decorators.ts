@@ -29,7 +29,7 @@ export const Delete = (path: string) => route('delete', path);
 
 /**
  * Décorateur pour définir les règles d'autorisation d'une route.
- * Applique `requireAuth` puis soit `requireLevel`, soit `requirePermission`.
+ * Applique `requireAuth` puis soit `requireLevel`,
  * @param rule - Un objet `AuthorisationRule` ({ level: ... } OU { feature: ..., action: ... }).
  */
 export function authorize(rule: AuthorisationRule): MethodDecorator {

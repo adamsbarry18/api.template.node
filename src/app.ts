@@ -2,21 +2,21 @@ import os from 'os';
 import express, { Express, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import passport from 'passport'; // Import Passport
+import passport from 'passport';
 import swaggerUi from 'swagger-ui-express';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 
 // Types et Configuration
-import { Request, Response } from './common/http'; // Vos types étendus
+import { Request, Response } from './common/http';
 import config from '@/config';
 import logger from '@/lib/logger';
-import swaggerSpec from '@/lib/openapi'; // Ou './lib/swagger' selon le nom de fichier réel
+import swaggerSpec from '@/lib/openapi';
 
 // Middlewares et Gestionnaires
 import { errorHandler } from '@/common/middleware/errorHandler';
-import { jsendMiddleware } from '@/common/middleware/JSend'; // Middleware JSend
-import { configurePassport } from '@/config/passport'; // Configuration de Passport JWT
+import { jsendMiddleware } from '@/common/middleware/JSend';
+import { initializePassportAuthentication } from './common/middleware/authentication';
 
 // Routeur API Principal
 import apiRouter from '@/api'; // Importe le routeur défini dans api/index.ts
@@ -102,8 +102,8 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 // --- Initialisation de l'Authentification (Passport) ---
-configurePassport(); // Configure la stratégie JWT (maintenant avec Bearer et check Redis)
-app.use(passport.initialize()); // Initialise Passport pour chaque requête
+initializePassportAuthentication();
+app.use(passport.initialize());
 
 // --- Définition des Routes ---
 

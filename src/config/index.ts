@@ -45,10 +45,7 @@ const envSchema = z
     DB_USERNAME: z.string().min(1),
     DB_PASSWORD: z.string().optional(), // Mot de passe optionnel (pour dev local ou auth différente)
     DB_DATABASE: z.string().min(1),
-    DB_SYNCHRONIZE: z.coerce
-      .boolean()
-      .default(false)
-      .describe('!! DANGER !! Set to false in production. Use migrations instead.'),
+    DB_SYNCHRONIZE: z.coerce.boolean().default(false),
     DB_LOGGING: z.coerce.boolean().default(false).describe('Log SQL queries executed by TypeORM'),
 
     // --- Authentification & Sécurité ---
@@ -62,52 +59,25 @@ const envSchema = z
       .default(60 * 60 * 24)
       .describe('Access Token expiration in seconds (default: 1 day)'), // 1 jour
     // JWT_REFRESH_EXPIRATION_SECONDS: z.coerce.number().int().positive().default(60 * 60 * 24 * 7).describe('Refresh Token expiration in seconds (default: 7 days)'), // Si vous utilisez des refresh tokens
-    PASSWORD_EXPIRY_DAYS: z.coerce
-      .number()
-      .int()
-      .positive()
-      .default(90)
-      .describe('Number of days after which user password expires'),
+    PASSWORD_EXPIRY_DAYS: z.coerce.number().int().positive().default(90),
     PASSWORD_RESET_CODE_TTL_SECONDS: z.coerce
       .number()
       .int()
       .positive()
-      .default(60 * 60 * 24 * 3)
-      .describe('TTL for password reset/confirmation codes in Redis (default: 3 days)'), // 3 jours
+      .default(60 * 60 * 24 * 3), // 3 jours
 
     // --- Redis ---
     REDIS_HOST: z.string().default('localhost'),
     REDIS_PORT: z.coerce.number().int().positive().default(6379),
     REDIS_PASSWORD: z.string().optional(),
     REDIS_DB: z.coerce.number().int().min(0).optional().default(0),
-    // Organisation des clés Redis
-    REDIS_KEYS_TOKEN_INVALIDATION_PREFIX: z
-      .string()
-      .default('backend:token_invalidation:')
-      .describe('Prefix for storing invalidated JWTs'),
-    REDIS_KEYS_USER_PERMISSIONS_PREFIX: z
-      .string()
-      .default('user:')
-      .describe('Prefix for user permissions cache key'),
-    REDIS_KEYS_USER_PERMISSIONS_SUFFIX: z
-      .string()
-      .default(':permissions')
-      .describe('Suffix for user permissions cache key'),
-    REDIS_KEYS_PWD_CONFIRM_PREFIX: z
-      .string()
-      .default('confirm-password:')
-      .describe('Prefix for password confirmation codes'),
-    REDIS_KEYS_PWD_RESET_PREFIX: z
-      .string()
-      .default('reset-password:')
-      .describe('Prefix for password reset codes'),
+
     // TTL pour le cache des autorisations
     AUTH_CACHE_TTL_SECONDS: z.coerce
       .number()
       .int()
       .positive()
-      .default(60 * 15)
-      .describe('TTL for cached user permissions in Redis (default: 15 minutes)'), // 15 minutes
+      .default(60 * 15), // 15 minutes
 
     // --- CORS ---
     CORS_ORIGIN: z

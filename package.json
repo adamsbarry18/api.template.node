@@ -13,7 +13,8 @@
       "test": "vitest run",
       "test:watch": "vitest",
       "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
-      "typeorm": "typeorm-ts-node-commonjs"
+      "typeorm": "typeorm-ts-node-commonjs",
+      "test-redis": "node -r tsconfig-paths/register -r ts-node/register src/test-redis.ts"
    },
    "dependencies": {
       "@types/compression": "^1.7.5",

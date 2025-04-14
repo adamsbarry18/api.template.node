@@ -2,9 +2,8 @@ import { Router, RequestHandler } from 'express';
 import { globalMetadataStorage, RouteMetadataArgs } from './metadata.storage';
 import { validateRequest } from '../middleware/validation';
 import { Request, Response, NextFunction } from '../http';
-import { requireAuth, requireLevel } from '@/config/passport';
 import logger from '@/lib/logger';
-import { requirePermission } from '../middleware/authorization';
+import { requireAuth, requireLevel, requirePermission } from '../middleware/authentication';
 import {
   parseFiltering,
   parsePagination,
