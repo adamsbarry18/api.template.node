@@ -2,273 +2,291 @@ import { Repository, DataSource, FindOptionsWhere, IsNull, Not, UpdateResult } f
 import { AppDataSource } from '@/database/data-source';
 import { User } from '../models/users.entity';
 import { PasswordStatus, SecurityLevel } from '../models/users.types';
+import { DatabaseErrorHandler } from '@/common/errors/httpErrors';
 
-/**
- * Repository pour l'entité User.
- * Encapsule toutes les interactions avec la base de données pour les utilisateurs,
- * en utilisant TypeORM.
- */
+// Options for user search queries
+interface FindUserOptions {
+  where: FindOptionsWhere<User>;
+  select?: (keyof User)[];
+  withDeleted?: boolean;
+}
+
+// Options for listing users
+interface FindAllUsersOptions {
+  skip?: number;
+  take?: number;
+  where?: FindOptionsWhere<User>;
+}
+
+// Selectable fields for queries including the password hash
+const USER_WITH_PASSWORD_FIELDS: (keyof User)[] = [
+  'id',
+  'uid',
+  'email',
+  'password',
+  'name',
+  'surname',
+  'level',
+  'internal',
+  'color',
+  'preferences',
+  'passwordUpdatedAt',
+  'passwordStatus',
+  'internalLevel',
+  'createdAt',
+  'updatedAt',
+  'authorisationOverrides',
+  'permissionsExpireAt',
+];
+
+// Repository for handling user-related database operations
 export class UserRepository {
-  private readonly ormRepository: Repository<User>;
+  private readonly repository: Repository<User>;
 
-  /**
-   * Crée une instance de UserRepository.
-   * @param dataSource - L'instance DataSource TypeORM. Par défaut, utilise AppDataSource globale.
-   * Permet l'injection de dépendances pour les tests.
-   */
   constructor(dataSource: DataSource = AppDataSource) {
-    this.ormRepository = dataSource.getRepository(User);
+    this.repository = dataSource.getRepository(User);
   }
 
   /**
-   * Trouve un utilisateur actif par son ID numérique.
-   * @param id - L'ID de l'utilisateur.
-   * @returns L'entité User trouvée ou null.
+   * Generic method to find a single user with options.
+   */
+  private async findOneWithOptions(options: FindUserOptions): Promise<User | null> {
+    try {
+      return await this.repository.findOne({
+        where: options.where,
+        select: options.select,
+        withDeleted: options.withDeleted,
+      });
+    } catch (error) {
+      DatabaseErrorHandler.handle(error, `Find one with options ${JSON.stringify(options.where)}`);
+    }
+  }
+
+  /**
+   * Finds an active user by their ID.
    */
   async findById(id: number): Promise<User | null> {
-    return this.ormRepository.findOne({
-      where: {
-        id,
-        deletedAt: IsNull(),
-      },
-    });
+    return this.findOneWithOptions({ where: { id, deletedAt: IsNull() } });
   }
 
   /**
-   * Trouve un utilisateur actif par son ID, incluant le mot de passe.
-   * Utile pour la vérification lors de la mise à jour du mot de passe.
-   * @param id - L'ID de l'utilisateur.
-   * @returns L'entité User trouvée avec le mot de passe, ou null.
+   * Finds an active user by their ID, including the password hash.
    */
   async findByIdWithPassword(id: number): Promise<User | null> {
-    return this.ormRepository.findOne({
+    return this.findOneWithOptions({
       where: { id, deletedAt: IsNull() },
-      select: [
-        'id',
-        'uid',
-        'email',
-        'name',
-        'surname',
-        'level',
-        'internal',
-        'language',
-        'color',
-        'preferences',
-        'passwordUpdatedAt',
-        'passwordStatus',
-        'internalLevel',
-        'createdAt',
-        'updatedAt',
-        'authorisationOverrides',
-        'permissionsExpireAt',
-        'password',
-      ],
+      select: USER_WITH_PASSWORD_FIELDS,
     });
   }
 
   /**
-   * Trouve un utilisateur actif par son adresse email (insensible à la casse).
-   * @param email - L'adresse email de l'utilisateur.
-   * @returns L'entité User trouvée ou null.
+   * Finds an active user by their email (case-insensitive).
    */
   async findByEmail(email: string): Promise<User | null> {
-    return this.ormRepository.findOne({
-      where: {
-        email: email.toLowerCase().trim(),
-        deletedAt: IsNull(),
-      },
+    const normalizedEmail = email.toLowerCase().trim();
+    return this.findOneWithOptions({
+      where: { email: normalizedEmail, deletedAt: IsNull() },
     });
   }
 
   /**
-   * Trouve un utilisateur actif par son adresse email, incluant le mot de passe.
-   * Utilisé principalement pour l'authentification (login).
-   * @param email - L'adresse email de l'utilisateur.
-   * @returns L'entité User complète (avec mot de passe) ou null.
+   * Finds an active user by their email (case-insensitive), including the password hash.
    */
   async findByEmailWithPassword(email: string): Promise<User | null> {
-    return this.ormRepository.findOne({
-      where: {
-        email: email.toLowerCase().trim(),
-        deletedAt: IsNull(),
-      },
+    const normalizedEmail = email.toLowerCase().trim();
+    return this.findOneWithOptions({
+      where: { email: normalizedEmail, deletedAt: IsNull() },
+      select: USER_WITH_PASSWORD_FIELDS,
     });
   }
 
   /**
-   * Trouve un utilisateur actif par son UID.
-   * @param uid - L'identifiant unique (UUID) de l'utilisateur.
-   * @returns L'entité User trouvée ou null.
+   * Finds an active user by their UID.
    */
   async findByUid(uid: string): Promise<User | null> {
-    return this.ormRepository.findOne({
-      where: { uid: uid, deletedAt: IsNull() },
-    });
+    return this.findOneWithOptions({ where: { uid, deletedAt: IsNull() } });
   }
 
   /**
-   * Récupère une liste d'utilisateurs actifs avec pagination et filtrage optionnels.
-   * @param options - Options de pagination (skip, take) et de filtrage (where).
-   * @returns Un objet contenant la liste des utilisateurs et le nombre total correspondant aux critères.
+   * Lists all active users with pagination and filtering.
    */
-  async findAll(
-    options: { skip?: number; take?: number; where?: FindOptionsWhere<User> } = {},
-  ): Promise<{ users: User[]; count: number }> {
-    const whereClause = { ...options.where, deletedAt: IsNull() };
-
-    const [users, count] = await this.ormRepository.findAndCount({
-      where: whereClause,
-      order: { createdAt: 'DESC' }, // Tri par défaut
-      skip: options.skip,
-      take: options.take,
-    });
-    return { users, count };
+  async findAll(options: FindAllUsersOptions = {}): Promise<{ users: User[]; count: number }> {
+    try {
+      const where = { ...options.where, deletedAt: IsNull() };
+      const [users, count] = await this.repository.findAndCount({
+        where,
+        order: { createdAt: 'DESC' },
+        skip: options.skip,
+        take: options.take,
+      });
+      return { users, count };
+    } catch (error) {
+      DatabaseErrorHandler.handle(error, 'Find all users');
+    }
   }
 
   /**
-   * Vérifie si un utilisateur actif existe avec l'adresse email donnée.
-   * @param email - L'adresse email à vérifier.
-   * @returns True si l'email existe pour un utilisateur actif, false sinon.
+   * Checks if an active user with the given email already exists (case-insensitive).
    */
   async checkEmailExists(email: string): Promise<boolean> {
-    return this.ormRepository.exists({
-      where: {
-        email: email.toLowerCase().trim(),
-        deletedAt: IsNull(),
-      },
-    });
+    try {
+      const normalizedEmail = email.toLowerCase().trim();
+      return await this.repository.exists({
+        where: { email: normalizedEmail, deletedAt: IsNull() },
+      });
+    } catch (error) {
+      DatabaseErrorHandler.handle(error, `Check email ${email}`);
+    }
   }
 
   /**
-   * Trouve un utilisateur spécifiquement marqué comme supprimé par son email.
-   * Utile pour la réactivation de compte.
-   * @param email - L'adresse email de l'utilisateur supprimé.
-   * @returns L'entité User supprimée ou null.
+   * Finds a soft-deleted user by their email (case-insensitive).
    */
   async findDeletedByEmail(email: string): Promise<User | null> {
-    return this.ormRepository.findOne({
-      where: {
-        email: email.toLowerCase().trim(),
-        deletedAt: Not(IsNull()),
-      },
+    const normalizedEmail = email.toLowerCase().trim();
+    return this.findOneWithOptions({
+      where: { email: normalizedEmail, deletedAt: Not(IsNull()) },
       withDeleted: true,
     });
   }
 
   /**
-   * Crée une instance de l'entité User (en mémoire, non persistée).
-   * @param dto - Données initiales pour l'utilisateur.
-   * @returns Une nouvelle instance de User.
+   * Creates a new user instance (without saving).
    */
   create(dto: Partial<User>): User {
-    return this.ormRepository.create(dto);
+    return this.repository.create(dto);
   }
 
   /**
-   * Sauvegarde une entité User en base de données.
-   * Gère l'insertion (si l'entité est nouvelle) ou la mise à jour (si l'entité a un ID).
-   * @param user - L'entité User à sauvegarder.
-   * @returns L'entité User sauvegardée (avec ID mis à jour si insertion).
+   * Saves a user entity to the database.
+   * Normalizes email and validates before saving.
    */
   async save(user: User): Promise<User> {
-    return this.ormRepository.save(user);
+    try {
+      if (user.email) {
+        user.email = user.email.toLowerCase().trim();
+      }
+      return await this.repository.save(user);
+    } catch (error) {
+      DatabaseErrorHandler.handle(error, `Save user ${user.id || 'new'}`);
+    }
   }
 
   /**
-   * Met à jour partiellement un ou plusieurs utilisateurs actifs correspondant aux critères.
-   * Utilise `update` de TypeORM pour l'efficacité (n'exécute qu'une seule requête UPDATE).
-   * Ne déclenche pas les décorateurs d'entité comme @BeforeUpdate.
-   * @param criteria - Critères pour trouver les utilisateurs à mettre à jour (ex: { id }). Inclut implicitement `deletedAt: IsNull()`.
-   * @param dto - Les champs à mettre à jour.
-   * @returns Un objet UpdateResult contenant le nombre de lignes affectées.
+   * Updates an active user based on criteria.
+   * Prevents updating sensitive fields like email, uid, password directly.
    */
   async update(
     criteria: number | FindOptionsWhere<User>,
     dto: Partial<User>,
   ): Promise<UpdateResult> {
-    const whereCriteria: FindOptionsWhere<User> =
-      typeof criteria === 'number'
-        ? { id: criteria, deletedAt: IsNull() }
-        : { ...criteria, deletedAt: IsNull() };
+    try {
+      const where: FindOptionsWhere<User> =
+        typeof criteria === 'number'
+          ? { id: criteria, deletedAt: IsNull() }
+          : { ...criteria, deletedAt: IsNull() };
 
-    delete dto.email;
-    delete dto.uid;
-    delete dto.password;
+      // Security: prevent updating sensitive fields directly via this method
+      const safeDto = { ...dto };
+      delete safeDto.email;
+      delete safeDto.uid;
+      delete safeDto.password;
 
-    return this.ormRepository.update(whereCriteria, dto);
+      return await this.repository.update(where, safeDto);
+    } catch (error) {
+      DatabaseErrorHandler.handle(error, `Update user with criteria ${JSON.stringify(criteria)}`);
+    }
   }
 
   /**
-   * Met à jour spécifiquement le mot de passe, son statut et sa date de mise à jour pour un utilisateur actif.
-   * @param id - L'ID de l'utilisateur.
-   * @param hashedPassword - Le nouveau mot de passe déjà haché.
-   * @param status - Le nouveau statut du mot de passe.
-   * @returns Un objet UpdateResult.
+   * Updates the password hash and status for an active user.
+   * Also updates the passwordUpdatedAt timestamp.
    */
   async updatePasswordAndStatus(
     id: number,
     hashedPassword: string,
     status: PasswordStatus,
   ): Promise<UpdateResult> {
-    return this.ormRepository.update(
-      { id, deletedAt: IsNull() },
-      {
-        password: hashedPassword,
-        passwordStatus: status,
-        passwordUpdatedAt: new Date(),
-      },
-    );
+    try {
+      return await this.repository.update(
+        { id, deletedAt: IsNull() },
+        {
+          password: hashedPassword,
+          passwordStatus: status,
+          passwordUpdatedAt: new Date(),
+        },
+      );
+    } catch (error) {
+      DatabaseErrorHandler.handle(error, `Update password for user ${id}`);
+    }
   }
 
   /**
-   * Met à jour uniquement le statut du mot de passe pour un utilisateur actif.
-   * @param id - L'ID de l'utilisateur.
-   * @param status - Le nouveau statut.
-   * @returns Un objet UpdateResult.
+   * Updates only the password status for an active user.
    */
   async updatePasswordStatus(id: number, status: PasswordStatus): Promise<UpdateResult> {
-    return this.ormRepository.update({ id, deletedAt: IsNull() }, { passwordStatus: status });
+    try {
+      return await this.repository.update({ id, deletedAt: IsNull() }, { passwordStatus: status });
+    } catch (error) {
+      DatabaseErrorHandler.handle(error, `Update password status for user ${id}`);
+    }
   }
 
   /**
-   * Supprime logiquement un utilisateur (soft delete).
-   * Anonymise l'email et supprime les overrides de permissions.
-   * @param id - L'ID de l'utilisateur à supprimer.
-   * @param anonymizedEmail - L'email anonymisé à utiliser.
-   * @returns Un objet UpdateResult.
+   * Soft deletes an active user by setting deletedAt and anonymizing the email.
+   * Also clears authorization overrides.
    */
   async softDelete(id: number, anonymizedEmail: string): Promise<UpdateResult> {
-    return this.ormRepository.update(
-      { id, deletedAt: IsNull() },
-      {
-        deletedAt: new Date(),
-        email: anonymizedEmail,
-        authorisationOverrides: null,
-        permissionsExpireAt: null,
-      },
-    );
+    try {
+      return await this.repository.update(
+        { id, deletedAt: IsNull() },
+        {
+          deletedAt: new Date(),
+          email: anonymizedEmail,
+          authorisationOverrides: null,
+          permissionsExpireAt: null,
+        },
+      );
+    } catch (error) {
+      DatabaseErrorHandler.handle(error, `Soft delete user ${id}`);
+    }
   }
 
   /**
-   * Restaure un utilisateur logiquement supprimé (annule le soft delete).
-   * @param id - L'ID de l'utilisateur à restaurer.
-   * @returns Un objet UpdateResult.
+   * Restores a soft-deleted user by setting deletedAt to null.
    */
   async restore(id: number): Promise<UpdateResult> {
-    return this.ormRepository.restore(id);
+    try {
+      return await this.repository.restore(id);
+    } catch (error) {
+      DatabaseErrorHandler.handle(error, `Restore user ${id}`);
+    }
   }
 
   /**
-   * Vérifie l'existence d'un utilisateur actif par ses critères.
-   * @param where - Critères de recherche TypeORM.
-   * @returns True si un utilisateur actif correspond, false sinon.
+   * Checks if an active user exists based on the given criteria.
    */
   async exists(where: FindOptionsWhere<User>): Promise<boolean> {
-    return this.ormRepository.exists({ where: { ...where, deletedAt: IsNull() } });
+    try {
+      return await this.repository.exists({
+        where: { ...where, deletedAt: IsNull() },
+      });
+    } catch (error) {
+      DatabaseErrorHandler.handle(error, `Check existence with criteria ${JSON.stringify(where)}`);
+    }
   }
 
+  /**
+   * Finds all active admin users.
+   */
   async findAdmins(): Promise<User[]> {
-    const { users } = await this.findAll({ where: { level: SecurityLevel.ADMIN } });
-    return users;
+    try {
+      const { users } = await this.findAll({
+        where: { level: SecurityLevel.ADMIN },
+      });
+      return users;
+    } catch (error) {
+      DatabaseErrorHandler.handle(error, 'Find admins');
+    }
   }
 }

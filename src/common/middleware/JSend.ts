@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from '@/common/http';
+import { Request, Response, NextFunction } from '@/config/http';
 import { HttpError } from '../errors/httpErrors';
 export interface IJSendHelper {
   success(data?: any): void;
@@ -9,15 +9,30 @@ export interface IJSendHelper {
   partial(data: { data: any; metadata: Record<string, any> }): void;
 }
 
-// Middleware qui attache l'helper `jsend` à `res`
+/**
+ * Middleware that attaches the `jsend` helper object to the `res` (response) object.
+ * This helper provides standardized methods for sending JSend-compliant responses.
+ * @param req The Express request object.
+ * @param res The Express response object (will be augmented with `res.jsend`).
+ * @param next The next middleware function.
+ */
 export function jsendMiddleware(req: Request, res: Response, next: NextFunction): void {
   const helper: IJSendHelper = {
+    /**
+     * Sends a JSend 'success' response.
+     * @param data Optional payload for the response. Defaults to null.
+     */
     success(data: any = null): void {
       if (res.headersSent) return;
       const response = { status: 'success', data };
       res.json(response);
     },
 
+    /**
+     * Sends a JSend 'fail' response. Typically used for client-side errors (4xx).
+     * Sets status code to 400 if it's currently below 400.
+     * @param data Payload containing details about the failure.
+     */
     fail(data: any): void {
       if (res.headersSent) return;
       if (res.statusCode < 400) {
@@ -27,6 +42,13 @@ export function jsendMiddleware(req: Request, res: Response, next: NextFunction)
       res.json(response);
     },
 
+    /**
+     * Sends a JSend 'error' response. Typically used for server-side errors (5xx).
+     * Sets status code to 500 if it's currently below 500, unless overridden by an HttpError status.
+     * Masks internal error details in production unless it's a validation error.
+     * @param errorData Can be an error message string, an Error object, an HttpError object,
+     *                  or an object with message, code, and data properties.
+     */
     error(
       errorData: { message: string; code?: string; data?: any } | string | Error | HttpError,
     ): void {
@@ -71,7 +93,11 @@ export function jsendMiddleware(req: Request, res: Response, next: NextFunction)
 
       res.json(response);
     },
-
+    /**
+     * Sends a JSend 'success' response specifically for partial content or paginated results,
+     * including metadata alongside the data.
+     * @param data An object containing `data` (the main payload) and `metadata`.
+     */
     partial(data: { data: any; metadata: Record<string, any> }): void {
       if (res.headersSent) return;
       const response = { status: 'success', ...data };

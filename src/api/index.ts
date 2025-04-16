@@ -1,10 +1,13 @@
 import { Router } from 'express';
 import * as glob from 'glob';
 import { resolve } from 'path';
-import logger from '@/lib/logger';
-import { registerRoutes } from '@/common/routing/register';
+import logger from '../lib/logger';
+import { registerRoutes } from '../common/routing/register';
 
-// Créer une instance de routeur Express pour agréger toutes les routes de l'API
+/**
+ * @description Create an Express router instance to aggregate all API routes.
+ * @const {Router} apiRouter
+ */
 const apiRouter = Router();
 const modulesPath = resolve(process.cwd(), 'src/modules');
 
@@ -23,6 +26,10 @@ if (routeFiles.length === 0) {
   logger.warn(`No route files found matching pattern: ${globPattern}. API might have no routes.`);
 }
 
+/**
+ * @description Iterate over route files and register routes for each valid controller.
+ * @param {string[]} routeFiles - Array of route file paths.
+ */
 routeFiles.forEach((routeFile) => {
   const relativePath = routeFile.replace(process.cwd(), '.');
   try {
@@ -44,4 +51,8 @@ routeFiles.forEach((routeFile) => {
   }
 });
 
+/**
+ * Exports the aggregated API router.
+ * @type {Router} apiRouter - The main API router.
+ */
 export default apiRouter;

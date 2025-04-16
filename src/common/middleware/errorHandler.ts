@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from '../http';
+import { Request, Response, NextFunction } from '../../config/http';
 import { HttpError, InternalServerError } from '../errors/httpErrors';
 import logger from '@/lib/logger';
 import config from '@/config';
@@ -20,7 +20,7 @@ export const errorHandler = (err: Error, req: Request, res: Response, next: Next
     `Error occurred: ${err.message}`,
   );
 
-  // Gestion spécifique des erreurs Zod pour une meilleure réponse client
+  // Specific handling for Zod errors to provide better client feedback.
   if (err instanceof ZodError) {
     error = new HttpError(422, 'Validation failed', 'ERR_VALIDATION', err.format());
   } else if (err instanceof HttpError) {
@@ -29,37 +29,37 @@ export const errorHandler = (err: Error, req: Request, res: Response, next: Next
     error = new InternalServerError('An unexpected error occurred');
   }
 
-  // Utilisation de res.jsend.error pour envoyer la réponse standardisée
-  // La logique de masquage des détails en production est gérée dans jsendMiddleware
+  // Use res.jsend.error to send the standardized response.
+  // The logic for masking details in production is handled within the jsendMiddleware itself or here based on NODE_ENV.
 
-  // Définir le statut HTTP avant d'appeler jsend.error
+  // Set the HTTP status before calling jsend.error.
   res.status(error.status);
 
-  // Construire l'objet d'erreur pour jsend
+  // Build the error object for the JSend response.
   const errorPayload = {
     message:
       config.NODE_ENV === 'production' && error.status === 500
-        ? 'Internal Server Error' // Masquer les messages 500 en prod
+        ? 'Internal Server Error' // Mask internal server error messages in production.
         : error.message,
     code: error.code,
-    // Inclure 'data' seulement si présent et pertinent (ex: validation) ou en dev
+    // Include 'data' only if present and relevant (e.g., validation errors) or in development.
     data:
       config.NODE_ENV !== 'production' || error.name === 'ValidationError' ? error.data : undefined,
-    // Inclure la stack seulement en dev
+    // Include stack trace only in development.
     stack: config.NODE_ENV !== 'production' ? err.stack : undefined,
   };
 
-  // Filtrer les clés undefined (comme stack en prod)
+  // Filter out undefined keys (like stack in production).
   Object.keys(errorPayload).forEach(
     (key) => errorPayload[key] === undefined && delete errorPayload[key],
   );
 
-  // Envoyer la réponse via jsend
-  // Assurez-vous que le type Response est étendu pour inclure jsend (normalement fait via http.ts ou un fichier de types global)
+  // Send the response via jsend.
+  // Ensure the Response type is extended to include jsend (typically done via http.ts or a global types file).
   if (res.jsend && typeof res.jsend.error === 'function') {
     res.jsend.error(errorPayload);
   } else {
-    // Fallback si jsend n'est pas attaché (ne devrait pas arriver si le middleware est bien placé)
+    // Fallback if jsend is not attached (should not happen if middleware is correctly placed).
     logger.warn('res.jsend.error was not available in errorHandler. Sending raw JSON.');
     res.json({ status: 'error', ...errorPayload });
   }

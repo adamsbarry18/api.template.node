@@ -2,36 +2,47 @@ import { AnyZodObject } from 'zod';
 import { RequestHandler } from 'express';
 import { AuthorisationRule } from '@/modules/users/models/users.types';
 
+/** Defines the allowed HTTP methods for routes. */
 export type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
 
-// Structure des métadonnées pour une route spécifique (méthode)
+/**
+ * Interface defining the structure of metadata collected for a specific route (controller method).
+ */
 export interface RouteMetadataArgs {
   path: string;
   method: HttpMethod;
   handlerName: string | symbol;
-  target: Function; // Constructeur de la classe Controller
+  target: Function;
   isInternal?: boolean;
-  // Stocke la règle d'autorisation (soit level, soit feature/action)
   authorization?: AuthorisationRule;
   validationSchema?: AnyZodObject;
-  // Ajouter des flags pour les autres décorateurs
   canPaginate?: boolean;
-  sortableFields?: string[] | boolean; // true = tous champs, string[] = champs spécifiques
+  sortableFields?: string[] | boolean;
   filterableFields?: string[] | boolean;
   searchableFields?: string[] | boolean;
 }
 
-// Ajouter une structure pour les métadonnées de classe (pour @middleware)
+/**
+ * Interface defining the structure of metadata collected for a controller class (e.g., class-level middleware).
+ */
 export interface ClassMetadataArgs {
   target: Function;
   middlewares: RequestHandler[];
 }
 
+/**
+ * Stores metadata collected from decorators (@route, @authorize, @validate, @middleware, etc.)
+ * for controller classes and their methods. This metadata is used during the route registration process.
+ */
 export class MetadataStorage {
   private routes: RouteMetadataArgs[] = [];
-  private classMiddlewares: ClassMetadataArgs[] = []; // Stockage pour @middleware
+  private classMiddlewares: ClassMetadataArgs[] = [];
 
-  // --- addRoute, getRoutesForTarget, updateRouteMetadata (légèrement adaptés) ---
+  /**
+   * Adds or merges route metadata collected from method decorators.
+   * If metadata for the same target/handler already exists, it merges the new arguments.
+   * @param {RouteMetadataArgs} args Metadata arguments for the route.
+   */
   addRoute(args: RouteMetadataArgs) {
     const existingIndex = this.routes.findIndex(
       (r) => r.target === args.target && r.handlerName === args.handlerName,
@@ -39,15 +50,26 @@ export class MetadataStorage {
     if (existingIndex === -1) {
       this.routes.push(args);
     } else {
-      // Fusionner si un autre décorateur ajoute des infos
       Object.assign(this.routes[existingIndex], args);
     }
   }
 
+  /**
+   * Retrieves all route metadata associated with a specific controller class constructor.
+   * @param {Function} target The controller class constructor.
+   * @returns {RouteMetadataArgs[]} An array of route metadata for the target class.
+   */
   getRoutesForTarget(target: Function): RouteMetadataArgs[] {
     return this.routes.filter((route) => route.target === target);
   }
 
+  /**
+   * Updates existing route metadata or creates a partial entry if none exists yet.
+   * This allows decorators like `@paginate` or `@authorize` to be applied before the main `@Get`/`@Post` decorator.
+   * @param {Function} target The controller class constructor.
+   * @param {string | symbol} handlerName The name of the controller method.
+   * @param {Partial<RouteMetadataArgs>} update The partial metadata to merge or add.
+   */
   updateRouteMetadata(
     target: Function,
     handlerName: string | symbol,
@@ -57,12 +79,15 @@ export class MetadataStorage {
     if (route) {
       Object.assign(route, update);
     } else {
-      // Créer une entrée partielle si nécessaire (ex: @paginate avant @Get)
       this.routes.push({ target, handlerName, ...update } as RouteMetadataArgs);
     }
   }
 
-  // --- Méthodes pour les middlewares de classe ---
+  /**
+   * Adds a middleware function to be applied at the class level (for all routes in the controller).
+   * @param {Function} target The controller class constructor.
+   * @param {RequestHandler} middleware The middleware function to add.
+   */
   addClassMiddleware(target: Function, middleware: RequestHandler) {
     let classMeta = this.classMiddlewares.find((cm) => cm.target === target);
     if (!classMeta) {
@@ -72,9 +97,17 @@ export class MetadataStorage {
     classMeta.middlewares.push(middleware);
   }
 
+  /**
+   * Retrieves all middleware functions associated with a specific controller class constructor.
+   * @param {Function} target The controller class constructor.
+   * @returns {RequestHandler[]} An array of class-level middleware functions, or an empty array if none.
+   */
   getClassMiddlewares(target: Function): RequestHandler[] {
     return this.classMiddlewares.find((cm) => cm.target === target)?.middlewares ?? [];
   }
 }
 
+/**
+ * Global singleton instance of MetadataStorage used by decorators and the route registration process.
+ */
 export const globalMetadataStorage = new MetadataStorage();

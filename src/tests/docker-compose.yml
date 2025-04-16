@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  db:
+    image: mysql:8
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: testdb
+      MYSQL_USER: testuser
+      MYSQL_PASSWORD: testpass
+    ports:
+      - "3307:3306"
+    command: --default-authentication-plugin=mysql_native_password
+    volumes:
+      - ./data:/var/lib/mysql
+      - ./data/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./data/datas.sql:/docker-entrypoint-initdb.d/02-datas.sql
+
+  redis:
+    image: redis:7
+    restart: always
+    ports:
+      - "6380:6379"
+
+  # Uncomment and configure if you want to run your API in the same compose
+  # api:
+  #   build:
+  #     context: ../..
+  #     dockerfile: Dockerfile
+  #   environment:
+  #     NODE_ENV: test
+  #     DB_HOST: db
+  #     DB_PORT: 3306
+  #     DB_USER: testuser
+  #     DB_PASSWORD: testpass
+  #     DB_DATABASE: testdb
+  #     REDIS_HOST: redis
+  #     REDIS_PORT: 6379
+  #   depends_on:
+  #     - db
+  #     - redis
+  #   ports:
+  #     - "3001:3000"

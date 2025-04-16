@@ -1,6 +1,6 @@
 import logger from '@/lib/logger';
 import jwt, { type JwtPayload } from 'jsonwebtoken';
-import { ExpressMiddleware, NextFunction, Request, Response } from '../http';
+import { ExpressMiddleware, NextFunction, Request, Response } from '../../config/http';
 import { AuthService } from '@/modules/auth/services/auth.services';
 import { UnauthorizedError } from '../errors/httpErrors';
 
@@ -8,9 +8,7 @@ const authService = new AuthService();
 logger.info('API:token');
 
 function getToken(req: Request): string | JwtPayload | null {
-  // headers
   if (req.headers) {
-    // authorization header
     if (req.headers.authorization) {
       const parts = req.headers.authorization.split(' ');
       if (parts.length === 2 && parts[0].toLowerCase() === 'bearer') {

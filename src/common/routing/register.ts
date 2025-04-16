@@ -1,6 +1,6 @@
 import { Router, RequestHandler } from 'express';
 import { globalMetadataStorage, RouteMetadataArgs } from './metadata.storage';
-import { Request, Response, NextFunction } from '../http';
+import { Request, Response, NextFunction } from '../../config/http';
 import logger from '@/lib/logger';
 import {
   requireAuth,
@@ -16,10 +16,11 @@ import {
 } from '../middleware/queryParssing';
 
 /**
- * Enregistre les routes définies par les décorateurs d'une classe Controller sur un routeur Express.
- * @param router Le routeur Express sur lequel enregistrer les routes.
- * @param ControllerClass La classe Controller contenant les décorateurs (son constructeur).
- * @param options Options pour contrôler l'enregistrement (ex: ignorer les internes).
+ * Registers routes defined by decorators within a Controller class onto an Express router.
+ * @param {Router} router The Express router to register routes on.
+ * @param {Function} ControllerClass The Controller class constructor containing the decorators.
+ * @param {object} [options] Options to control registration (e.g., ignore internal routes).
+ * @param {boolean} [options.ignoreInternal=true] Whether to skip routes marked with `@internal`.
  */
 export function registerRoutes(
   router: Router,
@@ -65,13 +66,13 @@ export function registerRoutes(
       return;
     }
 
-    // Construire le tableau des middlewares spécifiques à la méthode
+    // Build the array of middlewares specific to this method/route
     const methodMiddlewares: RequestHandler[] = [];
 
-    // 1. Authentification & Autorisation
+    // Step 1: Authentication & Authorization (if defined by @authorize)
     const authRule = routeMeta.authorization;
     if (authRule) {
-      methodMiddlewares.push(requireAuth);
+      methodMiddlewares.push(requireAuth); // Always require authentication if authorization is specified
 
       if (authRule.level !== undefined) {
         methodMiddlewares.push(requireLevel(authRule.level));
@@ -80,12 +81,12 @@ export function registerRoutes(
       }
     }
 
-    // 2. Validation Zod
+    // Step 2: Zod Validation (if defined by @validate)
     if (routeMeta.validationSchema) {
       methodMiddlewares.push(validateRequest(routeMeta.validationSchema));
     }
 
-    // 3. Middlewares de Parsing de Query (ajoutés conditionnellement)
+    // Step 3: Query Parsing Middlewares (added conditionally based on decorators like @paginate, @sortable, etc.)
     if (routeMeta.canPaginate) {
       methodMiddlewares.push(parsePagination);
     }
@@ -99,7 +100,7 @@ export function registerRoutes(
       methodMiddlewares.push(parseSearch(routeMeta.searchableFields));
     }
 
-    // 4. Handler final du contrôleur (wrapper)
+    // Step 4: Final Controller Handler (wrapped to catch async errors)
     const finalHandlerWrapper: RequestHandler = async (
       req: Request,
       res: Response,
@@ -113,7 +114,6 @@ export function registerRoutes(
     };
     methodMiddlewares.push(finalHandlerWrapper);
 
-    // Enregistrement de la route
     try {
       router[routeMeta.method](routeMeta.path, ...methodMiddlewares);
     } catch (error) {

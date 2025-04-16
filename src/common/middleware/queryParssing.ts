@@ -1,154 +1,144 @@
-import { Request, Response, NextFunction } from '@/common/http';
+import { Request, Response, NextFunction } from '@/config/http';
 import logger from '@/lib/logger';
 import { BadRequestError } from '../errors/httpErrors';
-import { SORT_DIRECTION, FILTER_OPERATOR, deepCopy, isJson } from '@/common/utils';
 
 const DEFAULT_PAGE_LIMIT = 10;
 const MAX_PAGE_LIMIT = 100;
-
-// Interfaces mises à jour avec les enums
 export interface PaginationInfo {
   limit: number;
   offset: number;
   page: number;
 }
-
 export interface SortInfo {
   field: string;
-  direction: SORT_DIRECTION;
+  direction: 'ASC' | 'DESC';
 }
-
 export interface FilterInfo {
   field: string;
-  operator: FILTER_OPERATOR;
+  operator: string;
   value: any;
 }
 
+/**
+ * Middleware to parse pagination parameters (`page`, `limit`) from query string.
+ * Attaches a `PaginationInfo` object to `req.pagination`.
+ * @throws {BadRequestError} If `page` or `limit` are invalid.
+ */
 export const parsePagination = (req: Request, res: Response, next: NextFunction): void => {
   try {
     const page = parseInt((req.query.page as string) || '1', 10);
-    const limit = parseInt((req.query.limit as string) || `${DEFAULT_PAGE_LIMIT}`, 10);
+    const limit = parseInt((req.query.limit as string) || String(DEFAULT_PAGE_LIMIT), 10);
 
-    if (isNaN(page) || page < 1) throw new BadRequestError('Paramètre "page" invalide');
-    if (isNaN(limit)) throw new BadRequestError(`"limit" doit être entre 1 et ${MAX_PAGE_LIMIT}`);
+    if (isNaN(page) || page < 1) {
+      throw new BadRequestError('Invalid "page" query parameter. Must be a positive integer.');
+    }
 
-    req.allow.pagination = {
-      limit: Math.min(limit, MAX_PAGE_LIMIT),
+    if (isNaN(limit) || limit < 1 || limit > MAX_PAGE_LIMIT) {
+      throw new BadRequestError(
+        `Invalid "limit" query parameter. Must be an integer between 1 and ${MAX_PAGE_LIMIT}.`,
+      );
+    }
+
+    req.pagination = {
+      limit,
       page,
       offset: (page - 1) * limit,
     };
+
     next();
   } catch (error) {
     next(error);
   }
 };
 
-export const parseSorting = (allowedFields: boolean | string[] = true) => {
-  return (req: Request, res: Response, next: NextFunction): void => {
+/**
+ * Middleware factory to parse sorting parameters (`sortBy`, `sortOrder`) from query string.
+ * Attaches an array of `SortInfo` objects to `req.sorting`.
+ * @param {boolean | string[]} [allowedFields=true] List of fields allowed for sorting.
+ *        `true` allows any field, `false` disallows sorting, an array specifies allowed fields.
+ * @returns {Function} Express middleware function.
+ * @throws {BadRequestError} If `sortOrder` is invalid or `sortBy` is not allowed.
+ */
+export const parseSorting =
+  (allowedFields: boolean | string[] = true) =>
+  (req: Request, res: Response, next: NextFunction): void => {
     try {
       const sortBy = req.query.sortBy as string;
-      const sortOrder = req.query.sortOrder as string;
-
-      if (!sortBy) return next();
-
-      const sortFields = sortBy.split(',').map((f) => f.trim());
-      const sortDirections = sortOrder?.split(',').map((d) => d.trim().toLowerCase()) || [];
-
-      if (allowedFields === false) throw new BadRequestError('Tri non autorisé');
-
-      if (Array.isArray(allowedFields)) {
-        const invalid = sortFields.find((f) => !allowedFields.includes(f));
-        if (invalid) throw new BadRequestError(`Champ de tri invalide: ${invalid}`);
+      if (!sortBy) {
+        return next();
       }
 
-      const sorting: SortInfo[] = sortFields.map((field, i) => {
-        let direction = sortDirections[i] || SORT_DIRECTION.ASC;
+      const sortOrderQuery = ((req.query.sortOrder as string) || 'ASC').toUpperCase();
 
-        if (!Object.values(SORT_DIRECTION).includes(direction as SORT_DIRECTION)) {
-          throw new BadRequestError('Direction de tri invalide');
-        }
+      if (sortOrderQuery !== 'ASC' && sortOrderQuery !== 'DESC') {
+        throw new BadRequestError('Invalid "sortOrder" query parameter. Must be "ASC" or "DESC".');
+      }
 
-        return {
-          field,
-          direction: direction as SORT_DIRECTION,
-        };
-      });
+      const sortOrder = sortOrderQuery as 'ASC' | 'DESC';
+      if (Array.isArray(allowedFields) && !allowedFields.includes(sortBy)) {
+        throw new BadRequestError(
+          `Invalid "sortBy" query parameter. Allowed fields: ${allowedFields.join(', ')}.`,
+        );
+      }
 
-      req.allow.sorting = sorting;
+      if (allowedFields === false) {
+        throw new BadRequestError('Sorting is not allowed for this resource.');
+      }
+
+      req.sorting = [{ field: sortBy, direction: sortOrder }];
       next();
     } catch (error) {
       next(error);
     }
   };
-};
 
-export const parseFiltering = (allowedFields: boolean | string[] = true) => {
-  return (req: Request, res: Response, next: NextFunction): void => {
-    try {
-      req.allow.filters = [];
-      const filters = req.query.filter;
+/**
+ * Middleware factory to parse filtering parameters (e.g., `filter[status]=active`).
+ * Attaches an array of `FilterInfo` objects to `req.filters`.
+ * Currently supports basic equality filters (`operator: 'eq'`).
+ * @param {boolean | string[]} [allowedFields=true] List of fields allowed for filtering.
+ *        `true` allows any field, `false` disallows filtering, an array specifies allowed fields.
+ * @returns {Function} Express middleware function.
+ */
+export const parseFiltering =
+  (allowedFields: boolean | string[] = true) =>
+  (req: Request, res: Response, next: NextFunction): void => {
+    req.filters = [];
 
-      if (!filters || typeof filters !== 'object') return next();
+    if (req.query.filter && typeof req.query.filter === 'object') {
+      logger.debug({ filtersQuery: req.query.filter }, 'Parsing filters...');
+      for (const field in req.query.filter) {
+        if (Array.isArray(allowedFields) && !allowedFields.includes(field)) {
+          logger.warn(`Filtering ignored for unauthorized field: ${field}`);
+          continue;
+        }
 
-      for (const field of Object.keys(filters)) {
         if (allowedFields === false) continue;
-        if (Array.isArray(allowedFields) && !allowedFields.includes(field)) continue;
-
-        const fieldFilters = filters[field];
-        if (typeof fieldFilters !== 'object') continue;
-
-        for (const [op, value] of Object.entries(fieldFilters)) {
-          if (!Object.values(FILTER_OPERATOR).includes(op as FILTER_OPERATOR)) {
-            logger.warn(`Opérateur de filtre ignoré: ${op}`);
-            continue;
-          }
-
-          let parsedValue = value;
-          if (typeof value === 'string') {
-            if (isJson(value)) {
-              parsedValue = deepCopy(JSON.parse(value));
-            } else {
-              parsedValue = tryParsePrimitive(value);
-            }
-          }
-
-          req.allow.filters.push({
-            field,
-            operator: op as FILTER_OPERATOR,
-            value: parsedValue,
-          });
-        }
+        req.filters.push({
+          field,
+          operator: 'eq',
+          value: req.query.filter[field],
+        });
       }
-      next();
-    } catch (error) {
-      next(error);
     }
+
+    next();
   };
-};
 
-export const parseSearch = (allowedFields: boolean | string[] = true) => {
-  return (req: Request, res: Response, next: NextFunction): void => {
-    try {
-      const search = req.query.search as string;
-
-      if (!search) return next();
-
-      if (allowedFields === false || (Array.isArray(allowedFields) && allowedFields.length === 0)) {
-        throw new BadRequestError('Recherche non autorisée');
-      }
-
-      req.allow.searchQuery = search.trim();
-      next();
-    } catch (error) {
-      next(error);
+/**
+ * Middleware factory to parse the search query parameter (`search`).
+ * Attaches the search string to `req.searchQuery`.
+ * @param {boolean | string[]} [allowedFields=true] Indicates if search is allowed.
+ *        The actual fields searched are determined by the service/repository layer.
+ *        `true` allows search, `false` disallows it. Array is not used here but kept for consistency.
+ * @returns {Function} Express middleware function.
+ */
+export const parseSearch =
+  (allowedFields: boolean | string[] = true) =>
+  (req: Request, res: Response, next: NextFunction): void => {
+    if (req.query.search && typeof req.query.search === 'string' && allowedFields) {
+      req.searchQuery = req.query.search.trim();
     }
-  };
-};
 
-function tryParsePrimitive(value: string): any {
-  if (/^\d+$/.test(value)) return parseInt(value, 10);
-  if (/^\d+\.\d+$/.test(value)) return parseFloat(value);
-  if (value === 'true') return true;
-  if (value === 'false') return false;
-  return value;
-}
+    next();
+  };

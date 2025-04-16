@@ -5,14 +5,14 @@ import { AuthorisationRule } from '@/modules/users/models/users.types';
 import logger from '@/lib/logger';
 
 /**
- * Décorateur pour définir une route sur une méthode de contrôleur.
- * @param method Méthode HTTP (get, post, etc.)
- * @param path Chemin de la route (ex: '/:id')
+ * Decorator to define a route on a controller method.
+ * @param {HttpMethod} method HTTP method (get, post, etc.).
+ * @param {string} path Route path (e.g., '/:id').
  */
 export function route(method: HttpMethod, path: string): MethodDecorator {
   return (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
     globalMetadataStorage.addRoute({
-      target: target.constructor, // Cible le constructeur de la classe
+      target: target.constructor, // Target the class constructor
       handlerName: propertyKey,
       method,
       path,
@@ -20,7 +20,7 @@ export function route(method: HttpMethod, path: string): MethodDecorator {
   };
 }
 
-// Raccourcis pour les méthodes HTTP courantes
+// Shortcuts for common HTTP methods
 export const Get = (path: string) => route('get', path);
 export const Post = (path: string) => route('post', path);
 export const Put = (path: string) => route('put', path);
@@ -28,13 +28,13 @@ export const Patch = (path: string) => route('patch', path);
 export const Delete = (path: string) => route('delete', path);
 
 /**
- * Décorateur pour définir les règles d'autorisation d'une route.
- * Applique `requireAuth` puis soit `requireLevel`,
- * @param rule - Un objet `AuthorisationRule` ({ level: ... } OU { feature: ..., action: ... }).
+ * Decorator to define authorization rules for a route.
+ * Applies `requireAuth` middleware, followed by either `requireLevel` or `requirePermission`.
+ * @param {AuthorisationRule} rule - An `AuthorisationRule` object ({ level: ... } OR { feature: ..., action: ... }).
  */
 export function authorize(rule: AuthorisationRule): MethodDecorator {
   return (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
-    // Valider que la règle est correctement formée
+    // Validate that the rule is correctly formed
     const hasLevel = rule.level !== undefined && rule.level !== null;
     const hasFeatureAction = !!rule.feature && !!rule.action;
 
@@ -50,7 +50,7 @@ export function authorize(rule: AuthorisationRule): MethodDecorator {
       );
       return;
     }
-    // Stocker la règle (qui contient soit level, soit feature/action)
+    // Store the rule (which contains either level or feature/action)
     globalMetadataStorage.updateRouteMetadata(target.constructor, propertyKey, {
       authorization: rule,
     });
@@ -58,8 +58,8 @@ export function authorize(rule: AuthorisationRule): MethodDecorator {
 }
 
 /**
- * Décorateur pour marquer une méthode de contrôleur comme interne.
- * La logique d'enregistrement décidera quoi faire avec (ex: ne pas l'exposer publiquement).
+ * Decorator to mark a controller method as internal.
+ * The registration logic will decide what to do with it (e.g., not expose it publicly).
  */
 export function internal(): MethodDecorator {
   return (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
@@ -70,8 +70,8 @@ export function internal(): MethodDecorator {
 }
 
 /**
- * Décorateur pour attacher un schéma de validation Zod à une route.
- * @param schema Schéma Zod pour valider { body, query, params }.
+ * Decorator to attach a Zod validation schema to a route.
+ * @param {AnyZodObject} schema Zod schema to validate { body, query, params }.
  */
 export function validate(schema: AnyZodObject): MethodDecorator {
   return (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
@@ -82,8 +82,9 @@ export function validate(schema: AnyZodObject): MethodDecorator {
 }
 
 /**
- * Active la pagination, le tri, le filtrage et la recherche pour la route.
- * Stocke des flags ou des configurations dans les métadonnées.
+ * Enables pagination, sorting, filtering, and searching for the route.
+ * Stores flags or configurations in the metadata.
+ * This is a convenience decorator that combines `sortable`, `filterable`, and `searchable`.
  */
 export function paginate(
   options: {
@@ -103,8 +104,8 @@ export function paginate(
 }
 
 /**
- * Active le tri pour la route.
- * @param allowedFields - `true` (tous champs), `false` (désactivé), ou `string[]` (champs autorisés).
+ * Enables sorting for the route.
+ * @param {boolean | string[]} [allowedFields=true] - `true` (all fields), `false` (disabled), or `string[]` (allowed fields).
  */
 export function sortable(allowedFields: boolean | string[] = true): MethodDecorator {
   return (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
@@ -115,8 +116,9 @@ export function sortable(allowedFields: boolean | string[] = true): MethodDecora
 }
 
 /**
- * Active la recherche textuelle pour la route.
- * @param allowedFields - `true` (tous champs), `false` (désactivé), ou `string[]` (champs autorisés pour la recherche).
+ * Enables full-text search for the route.
+ * @param {boolean | string[]} [allowedFields=true] - `true` (search enabled, specific fields depend on implementation),
+ *                                                  `false` (disabled), or `string[]` (potentially hints which fields are searchable).
  */
 export function searchable(allowedFields: boolean | string[] = true): MethodDecorator {
   return (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
@@ -127,8 +129,8 @@ export function searchable(allowedFields: boolean | string[] = true): MethodDeco
 }
 
 /**
- * Active le filtrage pour la route.
- * @param allowedFields - `true` (tous champs), `false` (désactivé), ou `string[]` (champs autorisés pour le filtrage).
+ * Enables filtering for the route.
+ * @param {boolean | string[]} [allowedFields=true] - `true` (all fields), `false` (disabled), or `string[]` (allowed fields).
  */
 export function filterable(allowedFields: boolean | string[] = true): MethodDecorator {
   return (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
@@ -139,13 +141,11 @@ export function filterable(allowedFields: boolean | string[] = true): MethodDeco
 }
 
 /**
- * Décorateur de Classe pour ajouter un middleware à toutes les routes du contrôleur.
- * @param fn - Le middleware Express à ajouter.
+ * Class Decorator to add middleware to all routes within the controller.
+ * @param {RequestHandler} fn - The Express middleware function to add.
  */
 export function middleware(fn: RequestHandler): ClassDecorator {
-  // Utiliser 'any' car ClassDecorator cible une fonction constructeur
   return function (target: any) {
-    // Vérifier que fn est bien une fonction middleware
     if (typeof fn !== 'function') {
       logger.error(`Invalid middleware provided to @middleware decorator for class ${target.name}`);
       return;

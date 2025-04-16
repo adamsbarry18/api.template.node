@@ -1,6 +1,6 @@
 import { BaseRouter } from '@/common/routing/BaseRouter';
 import { UsersService } from './services/users.services';
-import { Request, Response, NextFunction } from '@/common/http';
+import { Request, Response, NextFunction } from '@/config/http';
 import {
   Get,
   Post,
@@ -95,7 +95,7 @@ export default class UserRouter extends BaseRouter {
    * @param {Response} res - The response.
    * @param {NextFunction} next - The next middleware.
    */
-  @Patch('/users/:id')
+  @Put('/users/:id')
   @authorize({ level: SecurityLevel.USER })
   async updateUser(req: Request, res: Response, next: NextFunction): Promise<void> {
     const userIdToUpdate = parseInt(req.params.id, 10);
@@ -122,6 +122,15 @@ export default class UserRouter extends BaseRouter {
     if (req.user?.id === userIdToDelete) {
       return next(new ForbiddenError('Deleting your own account via the API is not permitted.'));
     }
-    await this.pipe(res, req, next, () => this.usersService.delete(userIdToDelete), 204);
+    await this.pipe(
+      res,
+      req,
+      next,
+      async () => {
+        this.usersService.delete(userIdToDelete);
+        return 'Successfull deletion';
+      },
+      200,
+    );
   }
 }

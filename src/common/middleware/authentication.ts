@@ -6,7 +6,7 @@ import {
   VerifiedCallback,
 } from 'passport-jwt';
 import passport from 'passport';
-import { NextFunction, Request, Response } from '@/common/http';
+import { NextFunction, Request, Response } from '@/config/http';
 import {
   ForbiddenError,
   InternalServerError,
@@ -17,7 +17,7 @@ import {
 } from '@/common/errors/httpErrors';
 import logger from '@/lib/logger';
 import { CustomJwtPayload } from '@/common/types';
-import { AuthenticatedUser } from '@/common/http';
+import { AuthenticatedUser } from '@/config/http';
 import config from '@/config';
 import { AuthService } from '@/modules/auth/services/auth.services';
 import { UsersService } from '@/modules/users/services/users.services';
@@ -39,39 +39,42 @@ export const initializePassportAuthentication = (): void => {
         const rawToken = ExtractJwt.fromAuthHeaderAsBearerToken()(req as any);
         try {
           if (await authService.isTokenInvalidated(rawToken)) {
-            return done(null, false, { message: 'Token invalidé ou expiré.' });
+            return done(null, false, { message: 'Token invalidated or expired.' });
           }
 
           const userId = payload.sub;
           if (!userId || typeof userId !== 'number') {
-            return done(null, false, { message: 'Structure du payload invalide.' });
+            return done(null, false, { message: 'Invalid token payload structure.' });
           }
           const user = await userService.findById(userId);
           if (user) {
             const authenticatedUser = { ...user, authToken: rawToken };
             return done(null, authenticatedUser);
           } else {
-            logger.warn(`Utilisateur introuvable (ID: ${userId}) pour le token actif.`);
+            logger.warn(`User not found (ID: ${userId}) for active token. Invalidating token.`);
             authService
               .logout(rawToken)
-              .catch((err) => logger.error(err, 'Erreur lors du logout automatique.'));
-            return done(null, false, { message: 'Utilisateur introuvable ou désactivé.' });
+              .catch((err) => logger.error(err, 'Error during automatic token logout.'));
+            return done(null, false, { message: 'User not found or disabled.' });
           }
         } catch (error) {
           if (error instanceof ServiceUnavailableError) {
             return done(error, false);
           }
-          logger.error(error, 'Erreur inattendue durant la stratégie JWT.');
+          logger.error(error, 'Unexpected error during JWT strategy execution.');
           return done(error, false);
         }
       },
     ),
   );
 
-  logger.info('Stratégie Passport JWT configurée (vérification via token et Redis).');
+  logger.info('Passport JWT strategy configured (token + Redis invalidation check).');
 };
 
-// Middleware requireAuth : Exige l’authentification pour accéder aux endpoints protégés.
+/**
+ * Middleware: requireAuth
+ * Ensures the request is authenticated via JWT. Attaches the user object to `req.user`.
+ */
 export const requireAuth = (req: Request, res: Response, next: NextFunction): void => {
   passport.authenticate(
     'jwt',
@@ -79,86 +82,98 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction): vo
     (err: any, user: AuthenticatedUser | false, info: any) => {
       if (err) {
         if (err instanceof HttpError) return next(err);
-        logger.error(err, 'Erreur interne lors de l’authentification Passport.');
-        return next(new InternalServerError('Erreur de traitement de l’authentification.', err));
+        logger.error(err, 'Internal error during Passport authentication.');
+        return next(new InternalServerError('Authentication processing error.', err));
       }
       if (!user) {
-        const message = info?.message || 'Accès non autorisé';
-        logger.warn(`Authentification JWT échouée: ${message}. URL: ${req.originalUrl}`);
+        const message = info?.message || 'Unauthorized access';
+        logger.warn(`JWT Authentication failed: ${message}. URL: ${req.originalUrl}`);
         return next(new UnauthorizedError(message));
       }
       req.user = user;
-      logger.debug(`Utilisateur ${req.user.id} authentifié. URL: ${req.originalUrl}`);
+      logger.debug(`User ${req.user.id} authenticated. URL: ${req.originalUrl}`);
       next();
     },
   )(req, res, next);
 };
 
-// Middleware requireLevel : Vérifie que l’utilisateur dispose d’un niveau de sécurité suffisant.
+/**
+ * Middleware Factory: requireLevel
+ * Checks if the authenticated user has the required security level or higher.
+ * @param requiredLevel The minimum security level required.
+ */
 export const requireLevel =
   (requiredLevel: number) =>
   (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
-      logger.error('requireLevel appelé sans authentification préalable (req.user manquant).');
-      return next(new UnauthorizedError('Contexte d’authentification manquant.'));
+      logger.error('requireLevel called without prior authentication (req.user missing).');
+      return next(new UnauthorizedError('Authentication context missing.'));
     }
-    if ((req.user as CustomJwtPayload).level < requiredLevel) {
+    if (req.user.level < requiredLevel) {
       logger.warn(
-        `Accès refusé pour l’utilisateur ${req.user.id}: niveau insuffisant. Requis: ${requiredLevel}.`,
+        `Access denied for user ${req.user.id}: insufficient level (${req.user.level}). Required: ${requiredLevel}. URL: ${req.originalUrl}`,
       );
-      return next(new ForbiddenError(`Niveau de sécurité insuffisant. Requis: ${requiredLevel}.`));
+      return next(new ForbiddenError(`Insufficient security level. Required: ${requiredLevel}.`));
     }
-    logger.debug(`Vérification de niveau réussie pour l’utilisateur ${req.user.id}.`);
+    logger.debug(
+      `Level check successful for user ${req.user.id} (Level ${req.user.level} >= Required ${requiredLevel}).`,
+    );
     next();
   };
 
-// Middleware requirePermission : Vérifie qu’un utilisateur possède une permission spécifique.
+/**
+ * Middleware Factory: requirePermission
+ * Checks if the authenticated user has a specific permission (feature + action).
+ * @param featureName The name of the feature.
+ * @param actionName The name of the action within the feature.
+ */
 export const requirePermission =
   (featureName: string, actionName: string) =>
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     if (!req.user?.id) {
       logger.error(
-        `Vérification de permission [${featureName}:${actionName}] sans utilisateur authentifié.`,
+        `Permission check [${featureName}:${actionName}] attempted without authenticated user.`,
       );
-      return next(new UnauthorizedError('Authentification requise pour vérifier les permissions.'));
+      return next(new UnauthorizedError('Authentication required to check permissions.'));
     }
     try {
       const hasPerm = await authService.checkAuthorisation(req.user.id, featureName, actionName);
       if (!hasPerm) {
         logger.warn(
-          `Accès refusé: l’utilisateur ${req.user.id} n’a pas la permission ${featureName}:${actionName}. URL: ${req.originalUrl}`,
+          `Access denied: User ${req.user.id} lacks permission ${featureName}:${actionName}. URL: ${req.originalUrl}`,
         );
-        return next(new ForbiddenError(`Permission requise: ${featureName}:${actionName}`));
+        return next(new ForbiddenError(`Required permission: ${featureName}:${actionName}`));
       }
-      logger.debug(
-        `Permission ${featureName}:${actionName} accordée pour l’utilisateur ${req.user.id}.`,
-      );
+      logger.debug(`Permission ${featureName}:${actionName} granted for user ${req.user.id}.`);
       next();
     } catch (error) {
       logger.error(
         error,
-        `Erreur durant la vérification de la permission ${featureName}:${actionName} pour l’utilisateur ${req.user.id}.`,
+        `Error during permission check (${featureName}:${actionName}) for user ${req.user.id}.`,
       );
       next(
         error instanceof HttpError
           ? error
-          : new InternalServerError('Erreur lors du traitement des permissions.', error),
+          : new InternalServerError('Error processing permissions.', error),
       );
     }
   };
 
+/**
+ * Middleware Factory: validateRequest
+ * Validates request body, query parameters, and route parameters against a Zod schema.
+ * Replaces request properties with validated/transformed data.
+ * @param schema The Zod schema to validate against.
+ */
 export const validateRequest =
   (schema: AnyZodObject) =>
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      // Valider req.body, req.query, req.params en fonction de ce que le schéma contient
       const parsed = await schema.parseAsync({
         body: req.body,
         query: req.query,
         params: req.params,
       });
-
-      // Remplacer les objets de requête par les données validées/transformées par Zod
       req.body = parsed.body ?? req.body;
       req.query = parsed.query ?? req.query;
       req.params = parsed.params ?? req.params;

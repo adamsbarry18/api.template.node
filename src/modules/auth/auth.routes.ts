@@ -1,7 +1,7 @@
 import { BaseRouter } from '@/common/routing/BaseRouter';
-import { Request, Response, NextFunction } from '@/common/http';
+import { Request, Response, NextFunction } from '@/config/http';
 import { Post, Delete, authorize } from '@/common/routing/decorators';
-import { UnauthorizedError } from '@/common/errors/httpErrors';
+import { UnauthorizedError, BadRequestError } from '@/common/errors/httpErrors';
 import { SecurityLevel } from '@/modules/users/models/users.types';
 import { AuthService } from './services/auth.services';
 import { UsersService } from '../users/services/users.services';
@@ -87,7 +87,12 @@ export default class AuthRouter extends BaseRouter {
   @Post('/token/generate')
   @authorize({ level: SecurityLevel.ADMIN })
   async generateTokenForUser(req: Request, res: Response, next: NextFunction): Promise<void> {
-    const { userId } = req.query;
+    const userIdParam = req.query.userId;
+
+    if (typeof userIdParam !== 'string' || isNaN(parseInt(userIdParam, 10))) {
+      throw new BadRequestError('Invalid or missing userId query parameter.');
+    }
+    const userId = parseInt(userIdParam, 10);
 
     await this.pipe(res, req, next, async () => this.authService.generateTokenForUser(userId), 200);
   }
@@ -107,10 +112,10 @@ export default class AuthRouter extends BaseRouter {
       req,
       next,
       async () => {
-        await this.usersService.sendPasswordResetEmail(email, referer);
-        res.jsend.success(
-          'If your email exists in our system, a password reset link has been sent.',
-        );
+        // Pass 'en' as the default language for now.
+        // TODO: Consider detecting language from request headers (e.g., Accept-Language)
+        await this.usersService.sendPasswordResetEmail(email, 'en', referer);
+        return 'If your email exists in our system, a password reset link has been sent.';
       },
       200,
     );

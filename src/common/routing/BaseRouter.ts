@@ -1,29 +1,27 @@
-import { Request, Response, NextFunction } from '@/common/http';
+import { Request, Response, NextFunction } from '@/config/http';
 import { Logger } from 'pino';
 import logger from '@/lib/logger';
 import { FilterInfo, PaginationInfo, SortInfo } from '../middleware/queryParssing';
 
 /**
- * Étend l'interface Request d'Express pour inclure les propriétés
- * ajoutées par nos middlewares de parsing.
+ * Extends the Express Request interface to include properties
+ * added by our parsing middlewares.
  */
 interface RequestWithQueryInfo extends Request {
   pagination?: PaginationInfo;
   sorting?: SortInfo[];
   filters?: FilterInfo[];
   searchQuery?: string;
-  // Inclure 'allow' si vous l'utilisez toujours (ce concept venait de l'ancien Router)
-  // allow?: { pagination?: boolean, sort?: boolean, filters?: boolean, search?: boolean };
 }
 
 /**
- * Structure de réponse succès standardisée
+ * Standardized success response structure (JSend-like).
  */
 interface SuccessResponse<T> {
   status: 'success';
   data: T;
   meta?: {
-    pagination?: PaginationInfo; // Inclut potentiellement totalItems/totalPages
+    pagination?: PaginationInfo;
     sorting?: SortInfo[];
     filters?: FilterInfo[];
     searchQuery?: string;
@@ -31,26 +29,24 @@ interface SuccessResponse<T> {
 }
 
 /**
- * Classe de base abstraite pour les contrôleurs, fournissant des utilitaires communs.
+ * Abstract base class for controllers, providing common utilities.
  */
 export abstract class BaseRouter {
-  // Logger protégé, initialisé directement avec l'instance importée
   protected readonly logger: Logger = logger;
 
   /**
-   * Exécute une fonction métier asynchrone, formate la réponse succès standardisée
-   * (incluant les métadonnées de requête si présentes) et délègue les erreurs au
-   * gestionnaire global via next().
+   * Executes an asynchronous business logic function, formats the standardized success response
+   * (including request metadata if present), and delegates errors to the global handler via next().
    *
-   * @param res Objet Response d'Express
-   * @param req Objet Request d'Express (typé avec nos infos de query)
-   * @param next Fonction NextFunction d'Express
-   * @param promiseFn Fonction retournant une promesse avec le résultat métier.
-   * @param statusCode Code HTTP de succès (défaut: 200, utiliser 201 pour création).
+   * @template T The type of the data returned by the business logic function.
+   * @param {Response} res Express Response object.
+   * @param {RequestWithQueryInfo} req Express Request object (typed with our query info).
+   * @param {NextFunction} next Express NextFunction.
+   * @param {() => Promise<T>} promiseFn Function returning a promise with the business result.
+   * @param {number} [statusCode=200] Success HTTP status code (default: 200, use 201 for creation).
    */
   protected async pipe<T>(
     res: Response,
-    // Utiliser notre type Request étendu ici
     req: RequestWithQueryInfo,
     next: NextFunction,
     promiseFn: () => Promise<T>,
@@ -59,23 +55,17 @@ export abstract class BaseRouter {
     try {
       const result = await promiseFn();
 
-      // Gérer les succès sans contenu (ex: après DELETE ou si le service retourne null/undefined)
       if (result === null || result === undefined) {
         if (statusCode === 204) {
-          // Code 204 No Content: réponse vide
           res.status(204).send();
           return;
         } else {
-          // Pour les autres codes (ex: 200), envoyer succès avec data: null
           res.status(statusCode).json({ status: 'success', data: null });
           return;
         }
       }
-
-      // Construire les métadonnées à partir de req si elles existent
       const meta: SuccessResponse<T>['meta'] = {};
       let hasMetadata = false;
-      // Vérifier l'existence des propriétés sur req (maintenant correctement typé)
       if (req.pagination) {
         meta.pagination = req.pagination;
         hasMetadata = true;
@@ -92,26 +82,19 @@ export abstract class BaseRouter {
         meta.searchQuery = req.searchQuery;
         hasMetadata = true;
       }
-
-      // Construire le corps de la réponse succès
       const responseBody: SuccessResponse<T> = {
         status: 'success',
         data: result,
-        ...(hasMetadata && { meta: meta }), // Ajouter meta si non vide
+        ...(hasMetadata && { meta: meta }),
       };
-
-      // Envoyer la réponse JSON
       res.status(statusCode).json(responseBody);
     } catch (error) {
-      // Gérer les erreurs attrapées durant l'exécution de promiseFn
-      // Log l'erreur avec le logger de l'instance (maintenant correctement typé)
       this.logger.error(error, `Error during piped execution for ${req.method} ${req.path}`);
-      // Déléguer au gestionnaire d'erreurs global via next()
       next(error);
     }
   }
 
-  // Ajoutez ici d'autres méthodes utilitaires si nécessaire
+  // Add other utility methods here if needed
   // protected getUserFromRequest(req: RequestWithQueryInfo): Express.User | undefined {
   //    return req.user;
   // }

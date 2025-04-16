@@ -1,20 +1,26 @@
 import { SecurityLevel } from '@/modules/users/models/users.types';
 
-// Interface pour la config BRUTE d'un flag
+/**
+ * Interface for the raw configuration of a flag.
+ */
 interface RawFlagConfig {
-  value: number; // Puissance de 2 (1, 2, 4, 8...)
+  value: number;
   inheritedFlags?: string[];
   level: SecurityLevel;
 }
 
-// Interface pour la config TRAITÉE d'un flag (avec masque hérité calculé)
+/**
+ * Interface for the processed configuration of a flag.
+ */
 interface ProcessedFlag {
-  value: number; // Valeur brute du flag spécifique
-  combinedMask: number; // Masque incluant ce flag et ceux hérités
+  value: number;
+  combinedMask: number;
   level: SecurityLevel;
 }
 
-// Config des features (INCHANGÉE)
+/**
+ * The configuration for features.
+ */
 export const FEATURES_CONFIG = [
   { id: 1, name: 'folder' },
   { id: 7, name: 'connect' },
@@ -35,8 +41,14 @@ export const FEATURES_CONFIG = [
   // ... etc
 ];
 
-// Objets d'accès rapide (INCHANGÉS)
+// Quick access objects (UNCHANGED)
+/**
+ * Quick access object for features by name.
+ */
 export const FEATURES_BY_NAME: { [key: string]: (typeof FEATURES_CONFIG)[0] } = {};
+/**
+ * Quick access object for features by ID.
+ */
 export const FEATURES_BY_ID: { [key: number]: (typeof FEATURES_CONFIG)[0] } = {};
 FEATURES_CONFIG.forEach((f) => {
   FEATURES_BY_NAME[f.name] = f;
@@ -44,17 +56,21 @@ FEATURES_CONFIG.forEach((f) => {
 });
 
 // Map[featureId] -> { actionName: RawFlagConfig }
-// Toujours utile pour l'encodage (connaître la valeur brute de chaque action)
+/**
+ * Map of feature ID to raw flag configurations.
+ */
 export const featuresRawFlagsConfigMap = new Map<number, Record<string, RawFlagConfig>>();
 
 // Map[featureId] -> { name: string, flags: { actionName: ProcessedFlag } }
-// Contient les masques combinés pré-calculés pour la VÉRIFICATION
+/**
+ * Map of feature ID to processed flag configurations.
+ */
 export const featuresProcessedFlagsMap = new Map<
   number,
   { name: string; flags: Record<string, ProcessedFlag> }
 >();
 
-// --- TRAITEMENT sans la bibliothèque `bitmask-flags` ---
+// --- PROCESSING without `bitmask-flags` library ---
 FEATURES_CONFIG.forEach((feature) => {
   const defaultFlags: Record<string, RawFlagConfig> = {
     read: { value: 1, inheritedFlags: [], level: SecurityLevel.READER },
@@ -87,27 +103,32 @@ FEATURES_CONFIG.forEach((feature) => {
     }
   });
 
-  // Stocker la config BRUTE
+  // Store raw configuration
   featuresRawFlagsConfigMap.set(feature.id, rawFlagsForFeature);
 
-  // Calculer les masques combinés (logique inchangée)
+  // Calculate combined masks (unchanged logic)
   const processedFlags: Record<string, ProcessedFlag> = {};
   for (const flagName of Object.keys(rawFlagsForFeature)) {
     processedFlags[flagName] = {
-      value: rawFlagsForFeature[flagName].value, // Garder la valeur brute
-      combinedMask: calculateCombinedMask(flagName, rawFlagsForFeature), // Masque avec héritage
+      value: rawFlagsForFeature[flagName].value,
+      combinedMask: calculateCombinedMask(flagName, rawFlagsForFeature),
       level: rawFlagsForFeature[flagName].level,
     };
   }
 
-  // Stocker la config TRAITÉE
+  // Store processed configuration
   featuresProcessedFlagsMap.set(feature.id, {
     name: feature.name,
     flags: processedFlags,
   });
 });
 
-// Fonction de calcul de masque (INCHANGÉE, elle utilise déjà la logique bitwise)
+/**
+ * Calculates the combined mask for a given flag.
+ * @param flagName The name of the flag.
+ * @param flags The flag configurations.
+ * @returns The combined mask.
+ */
 function calculateCombinedMask(flagName: string, flags: Record<string, RawFlagConfig>): number {
   const visited = new Set<string>();
   const stack: string[] = [flagName];
@@ -118,7 +139,7 @@ function calculateCombinedMask(flagName: string, flags: Record<string, RawFlagCo
       visited.add(current);
       const flag = flags[current];
       if (flag) {
-        mask |= flag.value; // Opération OU bitwise
+        mask |= flag.value;
         stack.push(...(flag.inheritedFlags ?? []));
       }
     }
@@ -126,7 +147,12 @@ function calculateCombinedMask(flagName: string, flags: Record<string, RawFlagCo
   return mask;
 }
 
-// Fonction de padding (INCHANGÉE)
+/**
+ * Pads a string with a given padding.
+ * @param value The string to pad.
+ * @param padding The padding string.
+ * @returns The padded string.
+ */
 export const paddingLeft = (value: string, padding: string): string => {
   return (padding + value).slice(-padding.length);
 };

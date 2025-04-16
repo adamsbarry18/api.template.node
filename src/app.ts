@@ -7,65 +7,63 @@ import swaggerUi from 'swagger-ui-express';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 
-// Types et Configuration
-import { Request, Response } from './common/http';
+// Types and Configuration
+import { Request, Response } from './config/http';
 import config from '@/config';
 import logger from '@/lib/logger';
-import swaggerSpec from '@/lib/swagger/openapi';
+import swaggerSpec from '@/lib/openapi';
 
-// Middlewares et Gestionnaires
+// Middleware and Handlers
 import { errorHandler } from '@/common/middleware/errorHandler';
 import { jsendMiddleware } from '@/common/middleware/JSend';
 import { initializePassportAuthentication } from './common/middleware/authentication';
 
-// Routeur API Principal
-import apiRouter from '@/api'; // Importe le routeur défini dans api/index.ts
+// Main API Router
+import apiRouter from '@/api'; // Imports the router defined in api/index.ts
 
-// Erreurs HTTP
+// HTTP Errors
 import { NotFoundError } from '@/common/errors/httpErrors';
 
-// Constantes
+// Constants
 const HOSTNAME = os.hostname();
-// const insecurePaths = [...] // N'est plus nécessaire ici, géré par l'absence de @authorize sur les routes publiques
 
-// Création de l'application Express
+// Create Express application
 const app: Express = express();
 
-// --- Configuration des Middlewares Essentiels ---
+// --- Essential Middleware Configuration ---
 
-app.disable('x-powered-by'); // Sécurité
-app.use(helmet()); // Sécurité (Headers HTTP)
+app.disable('x-powered-by'); // Security: Hide technology stack
+app.use(helmet()); // Security: Set various HTTP headers
 
 // CORS (Cross-Origin Resource Sharing)
 app.use(
   cors({
-    origin: config.CORS_ORIGIN, // Configurer les origines autorisées
+    origin: config.CORS_ORIGIN, // Configure allowed origins
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    // IMPORTANT: 'Authorization' doit être autorisé pour les Bearer tokens
+    // IMPORTANT: 'Authorization' must be allowed for Bearer tokens
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   }),
 );
 
-app.use(compression()); // Performance (Compression Gzip)
-app.use(cookieParser()); // Parsing des Cookies
+app.use(compression()); // Performance: Gzip compression
+app.use(cookieParser()); // Parse Cookies
 
-// Parsing du Corps des Requêtes (Body)
-const bodyLimit = '5mb'; // Limite de taille pour JSON et URL-encoded
+// Request Body Parsing
+const bodyLimit = '5mb'; // Size limit for JSON and URL-encoded bodies
 app.use(express.json({ limit: bodyLimit }));
 app.use(express.urlencoded({ extended: true, limit: bodyLimit }));
 
-// --- Middlewares Personnalisés ---
+// --- Custom Middlewares ---
 
-// Logging des Requêtes HTTP
+// HTTP Request Logging
 app.use((req: Request, res: Response, next: NextFunction) => {
-  // (Code du middleware de logging inchangé)
   const start = Date.now();
   const ip = req.ip || req.socket.remoteAddress;
   const { method, originalUrl } = req;
 
   res.on('finish', () => {
-    // Ne pas logger les requêtes pour la doc Swagger elle-même
+    // Do not log requests for Swagger docs itself
     if (originalUrl.startsWith('/api-docs')) {
       return;
     }
@@ -90,42 +88,42 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-// Standardisation des Réponses (JSend)
+// Response Standardization (JSend)
 app.use(jsendMiddleware);
 
-// Headers Personnalisés (Server, Env, Version)
+// Custom Headers (Server, Env, Version)
 app.use((req: Request, res: Response, next: NextFunction) => {
   res.header('X-Server', HOSTNAME);
   res.header('X-Env', config.NODE_ENV || 'development');
-  res.header('X-App-Version', process.env.npm_package_version || 'local'); // Version depuis package.json
+  res.header('X-App-Version', process.env.npm_package_version || 'local'); // Version from package.json
   next();
 });
 
-// --- Initialisation de l'Authentification (Passport) ---
+// --- Authentication Initialization (Passport) ---
 initializePassportAuthentication();
 app.use(passport.initialize());
 
-// --- Définition des Routes ---
+// --- Route Definitions ---
 
-// Documentation API (Swagger/OpenAPI)
+// API Documentation (Swagger/OpenAPI)
 app.use(
   '/api-docs',
-  swaggerUi.serve, // Sert les fichiers statiques de Swagger UI
+  swaggerUi.serve,
   swaggerUi.setup(swaggerSpec, {
     customSiteTitle: 'API Documentation',
     swaggerOptions: {
-      persistAuthorization: true, // Garde le token entre les refresh
-      defaultModelsExpandDepth: -1, // Masque les schémas par défaut
-      docExpansion: 'none', // Contrôle l'expansion des endpoints
-      filter: true, // Active la barre de recherche/filtre
+      persistAuthorization: true, // Keep authorization after refresh
+      defaultModelsExpandDepth: -1, // Hide models by default
+      docExpansion: 'none', // Collapse all sections by default
+      filter: true, // Enable filtering
     },
-    customCss: '.swagger-ui .topbar { display: none }', // Masque la topbar
+    customCss: '.swagger-ui .topbar { display: none }', // Hide Swagger UI top bar
   }),
 );
 
-// Route Racine (Health Check / Statut)
+// Root Route (Health Check / Status)
 app.get('/', (req: Request, res: Response) => {
-  // Utilise la réponse standardisée JSend
+  // Use standardized JSend response
   res.status(200).jsend.success({
     message: `API is running in ${config.NODE_ENV} mode`,
     timestamp: new Date().toISOString(),
@@ -134,26 +132,25 @@ app.get('/', (req: Request, res: Response) => {
   });
 });
 
-// --- Montage du Routeur API Principal ---
-// Monte toutes les routes définies dans './api/index.ts' sous le préfixe '/api/v1'
-// !! PAS de middleware d'authentification global appliqué ici !!
-// L'authentification est gérée au niveau de chaque route via les décorateurs et `registerRoutes`
+// --- Mount Main API Router ---
+// Mount all routes defined in './api/index.ts' under the '/api/v1' prefix
+// !! NO global authentication middleware applied here !!
+// Authentication is handled at the route level via decorators and `registerRoutes`
 app.use('/api/v1', apiRouter);
 
-// --- Gestion Finale des Erreurs ---
+// --- Final Error Handling ---
 
-// 404 Handler: Gère les routes non trouvées
-// Ce middleware est atteint si aucune route précédente n'a correspondu
+// 404 Handler: Catches requests that didn't match any previous route
 app.use((req: Request, res: Response, next: NextFunction) => {
   const error = new NotFoundError(
     `The requested resource was not found on this server: ${req.method} ${req.originalUrl}`,
   );
-  next(error); // Passe l'erreur au gestionnaire global
+  next(error); // Pass the error to the global error handler
 });
 
-// Gestionnaire d'Erreurs Global: Le dernier middleware
-// Il attrape toutes les erreurs passées via next(error)
-app.use(errorHandler); // Utilise votre gestionnaire d'erreurs personnalisé
+// Global Error Handler: The very last middleware
+// Catches all errors passed via next(error)
+app.use(errorHandler); // Use the custom error handler
 
-// Exporter l'instance `app` configurée pour le serveur principal (ex: src/server.ts)
+// Export the configured `app` instance for the main server (e.g., src/server.ts)
 export default app;
