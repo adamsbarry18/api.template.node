@@ -132,31 +132,21 @@ export class User extends Model {
   }
 
   /**
-   * Valide la complexité d'un mot de passe.
-   * Le mot de passe doit respecter les critères suivants :
-   * - Minimum 8 caractères
-   * - Au moins une lettre majuscule
-   * - Au moins une lettre minuscule
-   * - Au moins un chiffre
-   * - Au moins un caractère spécial (@$!%*?&)
-   *
-   * @param password - mot de passe à valider
-   * @returns {boolean} - true si le mot de passe répond aux critères
+   * Checks that a password:
+   * - Is at least 8 characters long
+   * - Contains at least one lowercase letter
+   * - Contains at least one uppercase letter
+   * - Contains at least one digit
+   * - Contains at least one special character (@$!%*?&)
+   * @param password - password input
+   * @returns {boolean} - true if password valid
    */
-  validatePassword(password: string): boolean {
-    const passwordSchema = z
-      .string()
-      .min(8)
-      .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/, {
-        message:
-          'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character',
-      });
-
-    const result = passwordSchema.safeParse(password);
-    return result.success;
+  isPasswordValid(password: string): boolean {
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/;
+    return passwordRegex.test(password);
   }
 
-  validationErrors: string[] = [];
+  validationInputErrors: string[] = [];
 
   /**
    * Validates the entity's required attributes and constraints using Zod.
@@ -188,13 +178,13 @@ export class User extends Model {
 
     if (!result.success) {
       // Pour chaque erreur, on récupère le path (champ concerné) et le message
-      this.validationErrors = result.error.issues.map((issue) => {
+      this.validationInputErrors = result.error.issues.map((issue) => {
         const fieldName = issue.path.join('.') || 'Field';
         return `${fieldName}: ${issue.message}`;
       });
       return false;
     }
-    this.validationErrors = [];
+    this.validationInputErrors = [];
     return true;
   }
 }

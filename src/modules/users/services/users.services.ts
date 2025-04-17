@@ -14,6 +14,7 @@ import {
   ConflictError,
   ForbiddenError,
   InternalServerError,
+  UnauthorizedError,
 } from '@/common/errors/httpErrors';
 import { getRedisClient, redisClient } from '@/lib/redis';
 import { sendMail } from '@/lib/mailer';
@@ -32,16 +33,13 @@ const BCRYPT_SALT_ROUNDS = 10;
 
 export class UsersService {
   private readonly userRepository: UserRepository;
-  private readonly authService: AuthService;
 
   /**
    * Creates an instance of UsersService.
    * @param {UserRepository} [userRepository=new UserRepository()] The user repository instance.
-   * @param {AuthService} [authService] The auth service instance.
    */
-  constructor(userRepository: UserRepository = new UserRepository(), authService?: AuthService) {
+  constructor(userRepository: UserRepository = new UserRepository()) {
     this.userRepository = userRepository;
-    this.authService = authService;
   }
 
   /**
@@ -132,10 +130,6 @@ export class UsersService {
    * @param {object} [options] Optional parameters.
    * @param {Request['user']} [options.requestingUser] The user making the request, used for authorization checks (e.g., creating internal users).
    * @returns {Promise<UserApiResponse>} The created or reactivated user's data.
-   * @throws {BadRequestError} If the password does not meet complexity requirements or if user data is invalid.
-   * @throws {ForbiddenError} If a non-internal user attempts to create an internal user.
-   * @throws {ConflictError} If the email address is already in use by an active user or if a unique constraint is violated.
-   * @throws {InternalServerError} If there is an unexpected error during creation or reactivation.
    */
   async create(
     input: CreateUserInput,
@@ -144,8 +138,10 @@ export class UsersService {
     const { password, email, permissions, permissionsExpireAt, ...restData } = input;
     const lowerCaseEmail = email.toLowerCase().trim();
     const userModel = new User();
-    if (!userModel.validatePassword(password)) {
-      throw new BadRequestError('Password does not meet complexity requirements.');
+    if (!userModel.isPasswordValid(password)) {
+      throw new BadRequestError(
+        'Password does not meet complexity requirements (min. 8 chars, 1 uppercase, 1 lowercase, 1 digit, 1 special character).',
+      );
     }
     const isInternalRequestor = !!options?.requestingUser?.internal;
     if (restData.internal && !isInternalRequestor) {
@@ -194,7 +190,7 @@ export class UsersService {
       }
 
       if (!userEntity.isValid()) {
-        throw new BadRequestError('User data is invalid. ', userEntity.validationErrors);
+        throw new BadRequestError('User data is invalid. ', userEntity.validationInputErrors);
       }
 
       const savedUser = await this.userRepository.save(userEntity);
@@ -231,11 +227,6 @@ export class UsersService {
    * @param {object} [options] Optional parameters.
    * @param {Request['user']} [options.requestingUser] The user making the request, used for authorization checks.
    * @returns {Promise<UserApiResponse>} The updated user's data.
-   * @throws {NotFoundError} If the user to update is not found.
-   * @throws {ForbiddenError} If the requesting user lacks permission to update the target user or specific fields (level, internal).
-   * @throws {BadRequestError} If the new password does not meet complexity requirements or if the resulting user data is invalid.
-   * @throws {ConflictError} If the update violates a unique constraint (e.g., email).
-   * @throws {InternalServerError} If there is an unexpected error during the update process.
    */
   async update(
     id: number,
@@ -264,8 +255,10 @@ export class UsersService {
       let passwordChanged = false;
 
       if (password) {
-        if (!user.validatePassword(password)) {
-          throw new BadRequestError('Password does not meet complexity requirements.');
+        if (!user.isPasswordValid(password)) {
+          throw new BadRequestError(
+            'Password does not meet complexity requirements (min. 8 chars, 1 uppercase, 1 lowercase, 1 digit, 1 special character).',
+          );
         }
 
         const isSame = await user.comparePassword(password);
@@ -294,7 +287,7 @@ export class UsersService {
       Object.assign(user, updatePayload);
 
       if (!user.isValid()) {
-        throw new BadRequestError('User data after update is invalid.', user.validationErrors);
+        throw new BadRequestError('User data after update is invalid.', user.validationInputErrors);
       }
 
       const result = await this.userRepository.update(id, updatePayload);
@@ -355,8 +348,6 @@ export class UsersService {
    * Resets a user's preferences by setting the preferences field to null.
    * @param {number} userId The ID of the user whose preferences are to be reset.
    * @returns {Promise<UserApiResponse>} The updated user data with preferences set to null.
-   * @throws {NotFoundError} If the user is not found.
-   * @throws {InternalServerError} If there is a database error.
    */
   async resetPreferences(userId: number): Promise<UserApiResponse> {
     return this.updatePreferences(userId, null);
@@ -366,8 +357,6 @@ export class UsersService {
    * Soft-deletes a user by setting the `deletedAt` timestamp and anonymizing the email.
    * @param {number} id The ID of the user to soft-delete.
    * @returns {Promise<void>}
-   * @throws {NotFoundError} If the user is not found.
-   * @throws {InternalServerError} If there is a database error during the soft delete.
    */
   async delete(id: number): Promise<void> {
     try {
@@ -405,7 +394,7 @@ export class UsersService {
     const redis = redisClient ?? getRedisClient();
     if (!redis) {
       logger.error('Redis unavailable for password confirmation email.');
-      return;
+      throw new InternalServerError('Service temporarily unavailable (Redis)');
     }
 
     try {
@@ -462,15 +451,11 @@ export class UsersService {
    * and deletes the code from Redis upon success.
    * @param {string} code The confirmation code received by the user.
    * @returns {Promise<boolean>} True if the confirmation was successful.
-   * @throws {HttpError} If Redis is unavailable (503).
-   * @throws {BadRequestError} If the code is invalid, expired, or associated data is corrupt.
-   * @throws {NotFoundError} If the user associated with the code is not found during the update.
-   * @throws {InternalServerError} If there is an unexpected database error.
    */
   async confirmPasswordChange(code: string): Promise<boolean> {
     const redis = redisClient ?? getRedisClient();
     if (!redis) {
-      throw new HttpError(503, 'Service temporarily unavailable (Redis)');
+      throw new InternalServerError('Service temporarily unavailable (Redis)');
     }
 
     const redisKey = `confirm-password:${code}`;
@@ -524,18 +509,24 @@ export class UsersService {
     const user = await this.userRepository.findByEmail(email);
     if (!user) {
       logger.warn(`Password reset requested for unknown email: ${email}. No email sent.`);
-      return;
+      throw new UnauthorizedError(`Not found or Invalid email ${email}. No email sent`);
     }
 
     const redis = redisClient ?? getRedisClient();
     if (!redis) {
       logger.error('Redis unavailable for password reset email.');
-      return;
+      throw new InternalServerError('Redis unavailable for password reset email.');
     }
 
     try {
       const code = this.generateRedisCode();
       const redisKey = `reset-password:${code}`;
+      console.log('[DEV] change-password code =', code);
+      await redis.setEx(
+        `confirm-password:${code}`,
+        CONFIRM_CODE_EXPIRE_SECONDS,
+        user.id.toString(),
+      );
 
       // Store user ID in Redis with expiration
       await redis.setEx(redisKey, CONFIRM_CODE_EXPIRE_SECONDS, user.id.toString());
@@ -591,15 +582,11 @@ export class UsersService {
    * @param {string} code The password reset code received by the user.
    * @param {string} newPassword The desired new password.
    * @returns {Promise<boolean>} True if the password reset was successful.
-   * @throws {HttpError} If Redis is unavailable (503).
-   * @throws {BadRequestError} If the code is invalid/expired, reset data is corrupt, the new password fails validation (complexity or same as old).
-   * @throws {NotFoundError} If the user associated with the code is not found.
-   * @throws {InternalServerError} If there is an unexpected database error during the update.
    */
   async resetPasswordWithCode(code: string, newPassword: string): Promise<boolean> {
     const redis = redisClient ?? getRedisClient();
     if (!redis) {
-      throw new HttpError(503, 'Service temporarily unavailable (Redis)');
+      throw new InternalServerError('Service temporarily unavailable (Redis)');
     }
 
     const redisKey = `reset-password:${code}`;
@@ -614,11 +601,11 @@ export class UsersService {
       throw new BadRequestError('Invalid reset data.');
     }
 
-    // Find user (with password for comparison)
     const user = await this.userRepository.findByIdWithPassword(userId);
-    // Validate the new password
-    if (!user.validatePassword(newPassword)) {
-      throw new BadRequestError('Password does not meet complexity requirements.');
+    if (!user.isPasswordValid(newPassword)) {
+      throw new BadRequestError(
+        'Password does not meet complexity requirements (min. 8 chars, 1 uppercase, 1 lowercase, 1 digit, 1 special character)',
+      );
     }
 
     if (!user) {

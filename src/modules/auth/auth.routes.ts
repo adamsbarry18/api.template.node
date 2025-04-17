@@ -72,29 +72,10 @@ export default class AuthRouter extends BaseRouter {
       next,
       async () => {
         await this.usersService.confirmPasswordChange(code);
-        res.jsend.success('Password change confirmed successfully.');
+        return 'Password change confirmed successfully.';
       },
       200,
     );
-  }
-
-  /**
-   * POST /token/generate - Generate a new token for a user.
-   * @param {Request} req The incoming request.
-   * @param {Response} res The response.
-   * @param {NextFunction} next The next middleware.
-   */
-  @Post('/token/generate')
-  @authorize({ level: SecurityLevel.ADMIN })
-  async generateTokenForUser(req: Request, res: Response, next: NextFunction): Promise<void> {
-    const userIdParam = req.query.userId;
-
-    if (typeof userIdParam !== 'string' || isNaN(parseInt(userIdParam, 10))) {
-      throw new BadRequestError('Invalid or missing userId query parameter.');
-    }
-    const userId = parseInt(userIdParam, 10);
-
-    await this.pipe(res, req, next, async () => this.authService.generateTokenForUser(userId), 200);
   }
 
   /**
@@ -114,7 +95,7 @@ export default class AuthRouter extends BaseRouter {
       async () => {
         // Pass 'en' as the default language for now.
         // TODO: Consider detecting language from request headers (e.g., Accept-Language)
-        await this.usersService.sendPasswordResetEmail(email, 'en', referer);
+        await this.usersService.sendPasswordResetEmail(email, 'fr', referer);
         return 'If your email exists in our system, a password reset link has been sent.';
       },
       200,
@@ -137,9 +118,28 @@ export default class AuthRouter extends BaseRouter {
       next,
       async () => {
         await this.usersService.resetPasswordWithCode(code, password);
-        res.jsend.success('Password has been successfully reset.');
+        return 'Password has been successfully reset.';
       },
       200,
     );
+  }
+
+  /**
+   * POST /token/generate - Generate a new token for a user.
+   * @param {Request} req The incoming request.
+   * @param {Response} res The response.
+   * @param {NextFunction} next The next middleware.
+   */
+  @Post('/token/generate')
+  @authorize({ level: SecurityLevel.ADMIN })
+  async generateTokenForUser(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const userIdParam = req.query.userId;
+
+    if (typeof userIdParam !== 'string' || isNaN(parseInt(userIdParam, 10))) {
+      throw new BadRequestError('Invalid or missing userId query parameter.');
+    }
+    const userId = parseInt(userIdParam, 10);
+
+    await this.pipe(res, req, next, async () => this.authService.generateTokenForUser(userId), 200);
   }
 }

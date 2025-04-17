@@ -40,7 +40,7 @@ interface MailOptions {
   subject: string;
   text?: string;
   html?: string;
-  from?: string; // Utilise MAIL_FROM par défaut si non fourni
+  from?: string;
 }
 
 /**
