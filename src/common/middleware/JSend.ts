@@ -1,10 +1,10 @@
 import { Request, Response, NextFunction } from '@/config/http';
-import { HttpError } from '../errors/httpErrors';
+import { BaseError } from '../errors/httpErrors';
 export interface IJSendHelper {
   success(data?: any): void;
   fail(data: any): void;
   error(
-    errorData: { message: string; code?: string; data?: any } | string | Error | HttpError,
+    errorData: { message: string; code?: string; data?: any } | string | Error | BaseError,
   ): void;
   partial(data: { data: any; metadata: Record<string, any> }): void;
 }
@@ -44,13 +44,13 @@ export function jsendMiddleware(req: Request, res: Response, next: NextFunction)
 
     /**
      * Sends a JSend 'error' response. Typically used for server-side errors (5xx).
-     * Sets status code to 500 if it's currently below 500, unless overridden by an HttpError status.
+     * Sets status code to 500 if it's currently below 500, unless overridden by an BaseError status.
      * Masks internal error details in production unless it's a validation error.
-     * @param errorData Can be an error message string, an Error object, an HttpError object,
+     * @param errorData Can be an error message string, an Error object, an BaseError object,
      *                  or an object with message, code, and data properties.
      */
     error(
-      errorData: { message: string; code?: string; data?: any } | string | Error | HttpError,
+      errorData: { message: string; code?: string; data?: any } | string | Error | BaseError,
     ): void {
       if (res.headersSent) return;
       if (res.statusCode < 500) {
@@ -61,7 +61,7 @@ export function jsendMiddleware(req: Request, res: Response, next: NextFunction)
 
       if (typeof errorData === 'string') {
         response = { status: 'error', message: errorData };
-      } else if (errorData instanceof HttpError) {
+      } else if (errorData instanceof BaseError) {
         response = {
           status: 'error',
           message: errorData.message,

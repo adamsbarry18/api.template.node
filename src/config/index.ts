@@ -24,7 +24,7 @@ const envSchema = z
   .object({
     // --- General ---
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-    PORT: z.coerce.number().int().positive().default(3000),
+    PORT: z.coerce.number().int().positive().default(8000),
     HOST: z
       .string()
       .ip({ version: 'v4' })
@@ -34,12 +34,12 @@ const envSchema = z
     FRONTEND_URL: z.string().url().optional(),
 
     // --- Database (TypeORM) ---
-    DB_TYPE: z.enum(['postgres', 'mysql', 'mariadb', 'sqlite', 'mssql']).default('postgres'),
+    DB_TYPE: z.enum(['postgres', 'mysql', 'mariadb', 'sqlite', 'mssql']).default('mysql'),
     DB_HOST: z.string().min(1),
     DB_PORT: z.coerce.number().int().positive(),
     DB_USERNAME: z.string().min(1),
     DB_PASSWORD: z.string().optional(),
-    DB_DATABASE: z.string().min(1),
+    DB_NAME: z.string().min(1),
     DB_SYNCHRONIZE: z.coerce.boolean().default(false),
     DB_LOGGING: z.coerce.boolean().default(false).describe('Log SQL queries executed by TypeORM'),
 

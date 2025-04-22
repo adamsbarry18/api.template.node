@@ -6,51 +6,36 @@ import passport from 'passport';
 import swaggerUi from 'swagger-ui-express';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
-
-// Types and Configuration
 import { Request, Response } from './config/http';
 import config from '@/config';
 import logger from '@/lib/logger';
 import swaggerSpec from '@/lib/openapi';
-
-// Middleware and Handlers
 import { errorHandler } from '@/common/middleware/errorHandler';
 import { jsendMiddleware } from '@/common/middleware/JSend';
-import { initializePassportAuthentication } from './common/middleware/authentication';
-
-// Main API Router
-import apiRouter from '@/api'; // Imports the router defined in api/index.ts
-
-// HTTP Errors
+import { passportAuthenticationMiddleware } from './common/middleware/authentication';
 import { NotFoundError } from '@/common/errors/httpErrors';
+import { initializedApiRouter } from '@/api';
 
-// Constants
 const HOSTNAME = os.hostname();
 
-// Create Express application
 const app: Express = express();
 
 // --- Essential Middleware Configuration ---
-
-app.disable('x-powered-by'); // Security: Hide technology stack
-app.use(helmet()); // Security: Set various HTTP headers
-
-// CORS (Cross-Origin Resource Sharing)
+app.disable('x-powered-by');
+app.use(helmet());
 app.use(
   cors({
-    origin: config.CORS_ORIGIN, // Configure allowed origins
+    origin: config.CORS_ORIGIN,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    // IMPORTANT: 'Authorization' must be allowed for Bearer tokens
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   }),
 );
+app.use(compression());
+app.use(cookieParser());
 
-app.use(compression()); // Performance: Gzip compression
-app.use(cookieParser()); // Parse Cookies
-
-// Request Body Parsing
-const bodyLimit = '5mb'; // Size limit for JSON and URL-encoded bodies
+// --- Request Body Parsing ---
+const bodyLimit = '5mb';
 app.use(express.json({ limit: bodyLimit }));
 app.use(express.urlencoded({ extended: true, limit: bodyLimit }));
 
@@ -63,8 +48,8 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   const { method, originalUrl } = req;
 
   res.on('finish', () => {
-    // Do not log requests for Swagger docs itself
-    if (originalUrl.startsWith('/api-docs')) {
+    // Skip logging for Swagger UI requests
+    if (originalUrl?.startsWith('/api-docs')) {
       return;
     }
     const duration = Date.now() - start;
@@ -88,22 +73,20 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-// Response Standardization (JSend)
+// JSend Response Standardization
 app.use(jsendMiddleware);
 
 // Custom Headers (Server, Env, Version)
 app.use((req: Request, res: Response, next: NextFunction) => {
   res.header('X-Server', HOSTNAME);
   res.header('X-Env', config.NODE_ENV || 'development');
-  res.header('X-App-Version', process.env.npm_package_version || 'local'); // Version from package.json
+  res.header('X-App-Version', process.env.npm_package_version || 'local');
   next();
 });
 
-// --- Authentication Initialization (Passport) ---
-initializePassportAuthentication();
+// --- Authentication Initialization Middleware ---
+passportAuthenticationMiddleware();
 app.use(passport.initialize());
-
-// --- Route Definitions ---
 
 // API Documentation (Swagger/OpenAPI)
 app.use(
@@ -112,18 +95,17 @@ app.use(
   swaggerUi.setup(swaggerSpec, {
     customSiteTitle: 'API Documentation',
     swaggerOptions: {
-      persistAuthorization: true, // Keep authorization after refresh
-      defaultModelsExpandDepth: -1, // Hide models by default
-      docExpansion: 'none', // Collapse all sections by default
-      filter: true, // Enable filtering
+      persistAuthorization: true,
+      defaultModelsExpandDepth: -1, 
+      docExpansion: 'none', 
+      filter: true,
     },
-    customCss: '.swagger-ui .topbar { display: none }', // Hide Swagger UI top bar
+    customCss: '.swagger-ui .topbar { display: none }',
   }),
 );
 
 // Root Route (Health Check / Status)
 app.get('/', (req: Request, res: Response) => {
-  // Use standardized JSend response
   res.status(200).jsend.success({
     message: `API is running in ${config.NODE_ENV} mode`,
     timestamp: new Date().toISOString(),
@@ -132,25 +114,50 @@ app.get('/', (req: Request, res: Response) => {
   });
 });
 
-// --- Mount Main API Router ---
-// Mount all routes defined in './api/index.ts' under the '/api/v1' prefix
-// !! NO global authentication middleware applied here !!
-// Authentication is handled at the route level via decorators and `registerRoutes`
-app.use('/api/v1', apiRouter);
+// --- Mount Main API Router & Final Error Handlers (Asynchronously) ---
+// This IIFE ensures that the API router is fully initialized before being mounted
+// and that the final error handlers are attached *after* the API routes.
+(async () => {
+  try {
+    logger.info('Waiting for API router initialization...');
+    const apiRouter = await initializedApiRouter; // Wait for the actual router
+    logger.info('API router initialized. Mounting routes under /api/v1...');
+    app.use('/api/v1', apiRouter); // Mount the initialized router
+    logger.info('✅ API routes mounted successfully.');
 
-// --- Final Error Handling ---
+    // --- Final Error Handling (Setup AFTER API routes) ---
 
-// 404 Handler: Catches requests that didn't match any previous route
-app.use((req: Request, res: Response, next: NextFunction) => {
-  const error = new NotFoundError(
-    `The requested resource was not found on this server: ${req.method} ${req.originalUrl}`,
-  );
-  next(error); // Pass the error to the global error handler
-});
+    // 404 Handler: Catches requests that didn't match any previous route
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      next(
+        new NotFoundError(
+          `The requested resource was not found on this server: ${req.method} ${req.originalUrl}`,
+        ),
+      );
+    });
 
-// Global Error Handler: The very last middleware
-// Catches all errors passed via next(error)
-app.use(errorHandler); // Use the custom error handler
+    // Global Error Handler: The very last middleware
+    app.use(errorHandler);
 
-// Export the configured `app` instance for the main server (e.g., src/server.ts)
+  } catch (error) {
+    logger.fatal({ err: error }, '❌ Failed to initialize and mount API router. Application might not function correctly.');
+
+    // Mount a fallback error handler if API router fails
+    app.use('/api/v1', (req, res, next) => {
+      next(new Error('API routes failed to initialize.'));
+    });
+    // Ensure final error handlers are still present even on failure
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      next(
+        new NotFoundError(
+          `The requested resource was not found on this server: ${req.method} ${req.originalUrl}`,
+        ),
+      );
+    });
+    app.use(errorHandler);
+  }
+})();
+
+// Export the configured app instance.
+// Note: The mounting of API routes and final error handlers is asynchronous.
 export default app;

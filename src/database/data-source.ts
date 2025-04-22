@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { DataSource, DataSourceOptions } from 'typeorm';
 import config from '@/config';
 import path from 'path';
+import { User } from '@/modules/users/models/users.entity';
 
 export const AppDataSourceOptions: DataSourceOptions = {
   type: config.DB_TYPE,
@@ -9,11 +10,11 @@ export const AppDataSourceOptions: DataSourceOptions = {
   port: config.DB_PORT,
   username: config.DB_USERNAME,
   password: config.DB_PASSWORD,
-  database: config.DB_DATABASE,
-  synchronize: config.DB_SYNCHRONIZE,
-  logging: ['error'],
-  entities: [path.join(__dirname, '../modules/**/*.entity{.js,.ts}')],
-  migrations: [path.join(__dirname, './migrations/*{.js,.ts}')],
+  database: config.DB_NAME,
+  synchronize: false,
+  logging: ["error"],
+  entities: [User],
+  migrations: [],
   subscribers: [],
   // namingStrategy: new SnakeNamingStrategy(), // Si besoin
 };

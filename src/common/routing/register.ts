@@ -1,7 +1,7 @@
 import { Router, RequestHandler } from 'express';
 import { globalMetadataStorage, RouteMetadataArgs } from './metadata.storage';
 import { Request, Response, NextFunction } from '../../config/http';
-import logger from '@/lib/logger';
+import logger from '../../lib/logger';
 import {
   requireAuth,
   requireLevel,
@@ -75,6 +75,7 @@ export function registerRoutes(
       methodMiddlewares.push(requireAuth); // Always require authentication if authorization is specified
 
       if (authRule.level !== undefined) {
+        // Appel direct du middleware, pas de try/catch
         methodMiddlewares.push(requireLevel(authRule.level));
       } else if (authRule.feature && authRule.action) {
         methodMiddlewares.push(requirePermission(authRule.feature, authRule.action));

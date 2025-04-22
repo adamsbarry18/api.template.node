@@ -117,7 +117,7 @@ export const parseFiltering =
         req.filters.push({
           field,
           operator: 'eq',
-          value: req.query.filter[field],
+          value: (req.query.filter as import('qs').ParsedQs)[field],
         });
       }
     }

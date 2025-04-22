@@ -1,0 +1,14 @@
+{
+  "passwordChanged": {
+    "subject": "Votre mot de passe a été modifié",
+    "html": "<h2>Votre mot de passe a été modifié</h2><p>Bonjour {{name}},</p><p>Votre mot de passe a bien été mis à jour. Si vous n'êtes pas à l'origine de ce changement, veuillez contacter immédiatement le support.</p>"
+  },
+  "passwordReset": {
+    "subject": "[{{app}}] Réinitialisation de mot de passe",
+    "html": "<h2>Réinitialisation de votre mot de passe</h2><p>Vous avez demandé à réinitialiser votre mot de passe. Veuillez cliquer sur le lien suivant :</p><p><a href=\"{{url}}\">{{url}}</a></p><p>Ce lien expire dans 3 jours.</p><p>Si vous n'avez pas fait cette demande, vous pouvez ignorer cet email.</p>"
+  },
+  "passwordConfirmation": {
+    "subject": "[{{app}}] Confirmation de mot de passe",
+    "html": "<h2>Confirmation de votre nouveau mot de passe</h2><p>Veuillez cliquer sur le lien suivant pour confirmer votre changement de mot de passe :</p><p><a href=\"{{url}}\">{{url}}</a></p><p>Ce lien expire dans 3 jours.</p>"
+  }
+}

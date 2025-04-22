@@ -1,8 +1,7 @@
 import { Repository, DataSource, FindOptionsWhere, IsNull, Not, UpdateResult } from 'typeorm';
 import { AppDataSource } from '@/database/data-source';
-import { User } from '../models/users.entity';
-import { PasswordStatus, SecurityLevel } from '../models/users.types';
-import { DatabaseErrorHandler } from '@/common/errors/httpErrors';
+import { PasswordStatus, SecurityLevel, User } from '../models/users.entity';
+import { ServerError } from '@/common/errors/httpErrors';
 
 // Options for user search queries
 interface FindUserOptions {
@@ -58,7 +57,7 @@ export class UserRepository {
         withDeleted: options.withDeleted,
       });
     } catch (error) {
-      DatabaseErrorHandler.handle(error, `Find one with options ${JSON.stringify(options.where)}`);
+      throw new ServerError(`Find one with options ${JSON.stringify(options.where)} ${error}`);
     }
   }
 
@@ -121,7 +120,7 @@ export class UserRepository {
       });
       return { users, count };
     } catch (error) {
-      DatabaseErrorHandler.handle(error, 'Find all users');
+      throw new ServerError(`Find all users, ${error}`);
     }
   }
 
@@ -135,7 +134,7 @@ export class UserRepository {
         where: { email: normalizedEmail, deletedAt: IsNull() },
       });
     } catch (error) {
-      DatabaseErrorHandler.handle(error, `Check email ${email}`);
+      throw new ServerError(`Check email ${email} ${error}`);
     }
   }
 
@@ -168,7 +167,7 @@ export class UserRepository {
       }
       return await this.repository.save(user);
     } catch (error) {
-      DatabaseErrorHandler.handle(error, `Save user ${user.id || 'new'}`);
+      throw new ServerError(`Save user ${user.id || 'new'} ${error}`);
     }
   }
 
@@ -194,7 +193,7 @@ export class UserRepository {
 
       return await this.repository.update(where, safeDto);
     } catch (error) {
-      DatabaseErrorHandler.handle(error, `Update user with criteria ${JSON.stringify(criteria)}`);
+      throw new ServerError(`Update user with criteria ${JSON.stringify(criteria)} ${error}`);
     }
   }
 
@@ -217,7 +216,7 @@ export class UserRepository {
         },
       );
     } catch (error) {
-      DatabaseErrorHandler.handle(error, `Update password for user ${id}`);
+      throw new ServerError(`Update password for user ${id} ${error}`);
     }
   }
 
@@ -228,7 +227,7 @@ export class UserRepository {
     try {
       return await this.repository.update({ id, deletedAt: IsNull() }, { passwordStatus: status });
     } catch (error) {
-      DatabaseErrorHandler.handle(error, `Update password status for user ${id}`);
+      throw new ServerError(`Update password status for user ${id} ${error}`);
     }
   }
 
@@ -248,7 +247,7 @@ export class UserRepository {
         },
       );
     } catch (error) {
-      DatabaseErrorHandler.handle(error, `Soft delete user ${id}`);
+      throw new ServerError(`Soft delete user ${id} ${error}`);
     }
   }
 
@@ -259,7 +258,7 @@ export class UserRepository {
     try {
       return await this.repository.restore(id);
     } catch (error) {
-      DatabaseErrorHandler.handle(error, `Restore user ${id}`);
+      throw new ServerError(`Restore user ${id} ${error}`);
     }
   }
 
@@ -272,7 +271,7 @@ export class UserRepository {
         where: { ...where, deletedAt: IsNull() },
       });
     } catch (error) {
-      DatabaseErrorHandler.handle(error, `Check existence with criteria ${JSON.stringify(where)}`);
+      throw new ServerError(`Check existence with criteria ${JSON.stringify(where)} ${error}`);
     }
   }
 
@@ -286,7 +285,7 @@ export class UserRepository {
       });
       return users;
     } catch (error) {
-      DatabaseErrorHandler.handle(error, 'Find admins');
+      throw new ServerError(`Find admins ${error}`);
     }
   }
 }

@@ -1,12 +1,81 @@
 import { Entity, Column, BeforeInsert, BeforeUpdate, Unique } from 'typeorm';
 import { z } from 'zod';
-import bcrypt from 'bcrypt';
-import { PasswordStatus } from './users.types';
-import { Model } from '@/common/models/Model';
-import { ValidationError } from '@/common/errors/httpErrors';
-import logger from '@/lib/logger';
+import bcrypt from 'bcryptjs';
+import { Model } from '../../../common/models/Model';
+
+export enum SecurityLevel {
+  EXTERNAL = 1,
+  READER = 2,
+  USER = 3,
+  INTEGRATOR = 4,
+  ADMIN = 5,
+  NOBODY = 999,
+}
+
+export enum Action {
+  CREATE = 'create',
+  READ = 'read',
+  UPDATE = 'write',
+  DELETE = 'delete',
+  EXECUTE = 'execute',
+}
+
+export type AuthorisationRule =
+  | { level: SecurityLevel; feature?: never; action?: never }
+  | { level?: never; feature: string; action: Action | string };
+
+// CreateUserInput type and schema
+export type CreateUserInput = {
+  email: string;
+  password: string;
+  name: string;
+  surname?: string | null;
+  level: number;
+  internalLevel?: number;
+  internal?: boolean;
+  color?: string | null;
+  passwordStatus?: PasswordStatus;
+  preferences?: Record<string, any> | null;
+  permissions?: Record<string, any> | null;
+  permissionsExpireAt?: Date | null;
+};
+
+export type UpdateUserInput = Omit<Partial<CreateUserInput>, 'email'>;
+
+export const validationInputErrors: string[] = [];
+
+// UserApiResponse type (DTO)
+export type UserApiResponse = {
+  id: number;
+  uid: string | null;
+  email: string;
+  name: string | null;
+  surname: string | null;
+  level: number;
+  internalLevel: number;
+  internal: boolean;
+  color: string | null;
+  passwordStatus: PasswordStatus;
+  createdAt: string | null;
+  updatedAt: string | null;
+  passwordUpdatedAt: string | null;
+  preferences: Record<string, any> | null;
+  permissionsExpireAt: string | null;
+  created_time?: Date;
+  updated_time?: Date;
+};
+
+// Interne type for decode overrides
+export type DecodedOverrides = Map<number, number>;
 
 const BCRYPT_SALT_ROUNDS = 10;
+
+// Définition de l'enum déplacée ici
+export enum PasswordStatus {
+  ACTIVE = 'ACTIVE',
+  VALIDATING = 'VALIDATING',
+  EXPIRED = 'EXPIRED',
+}
 
 /**
  * User entity representing application users
@@ -115,38 +184,12 @@ export class User extends Model {
   }
 
   /**
-   * Normalise l'adresse e-mail (minuscule et sans espaces).
-   */
-  normalizeEmail(): void {
-    if (this.email) {
-      this.email = this.email.toLowerCase().trim();
-    }
-  }
-
-  /**
    * Vérifie si l'utilisateur a des droits administrateurs.
    * @returns {boolean} - true si le niveau de l'utilisateur est 5
    */
   isAdmin(): boolean {
     return this.level === 5;
   }
-
-  /**
-   * Checks that a password:
-   * - Is at least 8 characters long
-   * - Contains at least one lowercase letter
-   * - Contains at least one uppercase letter
-   * - Contains at least one digit
-   * - Contains at least one special character (@$!%*?&)
-   * @param password - password input
-   * @returns {boolean} - true if password valid
-   */
-  isPasswordValid(password: string): boolean {
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/;
-    return passwordRegex.test(password);
-  }
-
-  validationInputErrors: string[] = [];
 
   /**
    * Validates the entity's required attributes and constraints using Zod.
@@ -178,13 +221,16 @@ export class User extends Model {
 
     if (!result.success) {
       // Pour chaque erreur, on récupère le path (champ concerné) et le message
-      this.validationInputErrors = result.error.issues.map((issue) => {
-        const fieldName = issue.path.join('.') || 'Field';
-        return `${fieldName}: ${issue.message}`;
-      });
+      validationInputErrors.length = 0;
+      validationInputErrors.push(
+        ...result.error.issues.map((issue) => {
+          const fieldName = issue.path.join('.') || 'Field';
+          return `${fieldName}: ${issue.message}`;
+        }),
+      );
       return false;
     }
-    this.validationInputErrors = [];
+    validationInputErrors.length = 0;
     return true;
   }
 }

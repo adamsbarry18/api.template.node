@@ -1,4 +1,27 @@
-import { SecurityLevel } from '@/modules/users/models/users.types';
+import { SecurityLevel } from '@/modules/users/models/users.entity';
+
+/**
+ * Map of feature names to allowed action names.
+ * Example: { user: ['read', 'write'], config: ['read'] }
+ */
+export type PermissionsInputMap = Record<string, string[]>;
+
+/**
+ * Effective and decoded authorisations for a user.
+ * Combines base level and overrides, considering expiry.
+ */
+export interface DecodedAuthorisations {
+  userId: number;
+  level: number;
+  expiresAt: Date | null;
+  permissions: Record<
+    string,
+    {
+      id: number;
+      actions: string[];
+    }
+  >;
+}
 
 /**
  * Interface for the raw configuration of a flag.
@@ -23,19 +46,27 @@ interface ProcessedFlag {
  */
 export const FEATURES_CONFIG = [
   { id: 1, name: 'folder' },
-  { id: 7, name: 'connect' },
   {
-    id: 15,
+    id: 2,
     name: 'user',
     flags: {
-      /* ... */
-    } as Record<string, Partial<RawFlagConfig>>,
-  },
-  {
-    id: 42,
-    name: 'config',
-    flags: {
-      /* ... */
+      read: {
+        value: 1,
+        level: SecurityLevel.READER,
+      },
+      write: {
+        value: 2,
+        level: SecurityLevel.ADMIN,
+      },
+      create: {
+        value: 4,
+        inheritedFlags: ['write'],
+        level: SecurityLevel.ADMIN,
+      },
+      execute: {
+        value: 8,
+        level: SecurityLevel.ADMIN,
+      },
     } as Record<string, Partial<RawFlagConfig>>,
   },
   // ... etc

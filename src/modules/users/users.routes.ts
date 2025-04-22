@@ -15,21 +15,34 @@ import {
   searchable,
 } from '@/common/routing/decorators';
 import { ForbiddenError, UnauthorizedError } from '@/common/errors/httpErrors';
-import { SecurityLevel, Action } from './models/users.types';
+import { SecurityLevel } from './models/users.entity';
 
 export default class UserRouter extends BaseRouter {
-  private usersService: UsersService;
-
-  constructor() {
-    super();
-    this.usersService = new UsersService();
-  }
+  UsersService = UsersService.getInstance();
 
   /**
-   * GET /users - Retrieve all users.
-   * @param {Request} req - The incoming request.
-   * @param {Response} res - The response.
-   * @param {NextFunction} next - The next middleware.
+   * @openapi
+   * /users:
+   *   get:
+   *     summary: Get all users
+   *     tags:
+   *       - Users
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: query
+   *         name: page
+   *         schema:
+   *           type: integer
+   *         description: Page number for pagination
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *         description: Number of items per page
+   *     responses:
+   *       200:
+   *         description: List of users
    */
   @Get('/users')
   @authorize({ level: SecurityLevel.ADMIN })
@@ -38,14 +51,23 @@ export default class UserRouter extends BaseRouter {
   @filterable(['level', 'internal', 'email'])
   @searchable(['email', 'name', 'surname'])
   async getAllUsers(req: Request, res: Response, next: NextFunction): Promise<void> {
-    await this.pipe(res, req, next, () => this.usersService.findAll({ requestingUser: req.user }));
+    await this.pipe(res, req, next, () => this.UsersService.findAll({ requestingUser: req.user }));
   }
 
   /**
-   * GET /users/me - Retrieve the current user's information.
-   * @param {Request} req - The incoming request.
-   * @param {Response} res - The response.
-   * @param {NextFunction} next - The next middleware.
+   * @openapi
+   * /users/me:
+   *   get:
+   *     summary: Get current user information
+   *     tags:
+   *       - Users
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Current user information
+   *       401:
+   *         description: Unauthorized
    */
   @Get('/users/me')
   @authorize({ level: SecurityLevel.READER })
@@ -54,27 +76,60 @@ export default class UserRouter extends BaseRouter {
     if (!userId) {
       return next(new UnauthorizedError('User ID not found in token payload.'));
     }
-    await this.pipe(res, req, next, () => this.usersService.findById(userId));
+    await this.pipe(res, req, next, () => this.UsersService.findById(userId));
   }
 
   /**
-   * GET /users/:id - Retrieve a user by ID.
-   * @param {Request} req - The incoming request.
-   * @param {Response} res - The response.
-   * @param {NextFunction} next - The next middleware.
+   * @openapi
+   * /users/{id}:
+   *   get:
+   *     summary: Get user by ID
+   *     tags:
+   *       - Users
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: integer
+   *         description: User ID
+   *     responses:
+   *       200:
+   *         description: User found
+   *       404:
+   *         description: User not found
    */
   @Get('/users/:id')
   @authorize({ level: SecurityLevel.ADMIN })
   async getUserById(req: Request, res: Response, next: NextFunction): Promise<void> {
     const userId = parseInt(req.params.id, 10);
-    await this.pipe(res, req, next, () => this.usersService.findById(userId));
+    await this.pipe(res, req, next, () =>
+      this.UsersService.findById(userId, { requestingUser: req.user }),
+    );
   }
 
   /**
-   * POST /users - Create a new user.
-   * @param {Request} req - The incoming request.
-   * @param {Response} res - The response.
-   * @param {NextFunction} next - The next middleware.
+   * @openapi
+   * /users:
+   *   post:
+   *     summary: Create a new user
+   *     tags:
+   *       - Users
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             $ref: '#/components/schemas/UserInput'
+   *     responses:
+   *       201:
+   *         description: User created
+   *       400:
+   *         description: Invalid data
    */
   @Post('/users')
   @authorize({ level: SecurityLevel.ADMIN })
@@ -84,53 +139,169 @@ export default class UserRouter extends BaseRouter {
       res,
       req,
       next,
-      () => this.usersService.create(userInput, { requestingUser: req.user }),
+      () => this.UsersService.create(userInput, { requestingUser: req.user }),
       201,
     );
   }
 
   /**
-   * PATCH /users/:id - Update a user.
-   * @param {Request} req - The incoming request.
-   * @param {Response} res - The response.
-   * @param {NextFunction} next - The next middleware.
+   * @openapi
+   * /users/{id}:
+   *   put:
+   *     summary: Update a user
+   *     tags:
+   *       - Users
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: integer
+   *         description: User ID
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             $ref: '#/components/schemas/UserInput'
+   *     responses:
+   *       200:
+   *         description: User updated
+   *       403:
+   *         description: Forbidden
+   *       404:
+   *         description: User not found
    */
   @Put('/users/:id')
-  @authorize({ level: SecurityLevel.USER })
+  @authorize({ level: SecurityLevel.READER })
   async updateUser(req: Request, res: Response, next: NextFunction): Promise<void> {
     const userIdToUpdate = parseInt(req.params.id, 10);
     const updateData = req.body;
-    const requestingUser = req.user;
-    if (requestingUser?.id !== userIdToUpdate && requestingUser?.level < SecurityLevel.ADMIN) {
-      return next(new ForbiddenError('You do not have permission to update this user.'));
-    }
     await this.pipe(res, req, next, () =>
-      this.usersService.update(userIdToUpdate, updateData, { requestingUser }),
+      this.UsersService.update(userIdToUpdate, updateData, { requestingUser: req.user }),
     );
   }
 
   /**
-   * DELETE /users/:id - Delete a user.
-   * @param {Request} req - The incoming request.
-   * @param {Response} res - The response.
-   * @param {NextFunction} next - The next middleware.
+   * @openapi
+   * /users/{id}:
+   *   delete:
+   *     summary: Delete a user
+   *     tags:
+   *       - Users
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: integer
+   *         description: User ID
+   *     responses:
+   *       200:
+   *         description: User deleted
+   *       403:
+   *         description: Forbidden
+   *       404:
+   *         description: User not found
    */
   @Delete('/users/:id')
-  @authorize({ level: SecurityLevel.ADMIN })
+  @authorize({ level: SecurityLevel.READER })
   async deleteUser(req: Request, res: Response, next: NextFunction): Promise<void> {
     const userIdToDelete = parseInt(req.params.id, 10);
-    if (req.user?.id === userIdToDelete) {
-      return next(new ForbiddenError('Deleting your own account via the API is not permitted.'));
-    }
     await this.pipe(
       res,
       req,
       next,
       async () => {
-        this.usersService.delete(userIdToDelete);
+        await this.UsersService.delete(userIdToDelete, { requestingUser: req.user });
         return 'Successfull deletion';
       },
       200,
     );
+  }
+
+  /**
+   * @openapi
+   * /users/{id}/preferences:
+   *   put:
+   *     summary: Update user preferences
+   *     tags:
+   *       - Users
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: integer
+   *         description: User ID
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *     responses:
+   *       200:
+   *         description: Preferences updated
+   *       403:
+   *         description: Forbidden
+   *       404:
+   *         description: User not found
+   */
+  @Put('/users/:id/preferences')
+  @authorize({ level: SecurityLevel.READER })
+  async updatePreferences(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const userId = parseInt(req.params.id, 10);
+    const preferences = req.body;
+
+    // Vérification que l'utilisateur modifie ses propres préférences ou est un admin
+    if (req.user?.id !== userId && (req.user?.level ?? -1) < SecurityLevel.ADMIN) {
+      return next(new ForbiddenError('You can only update your own preferences'));
+    }
+
+    await this.pipe(res, req, next, () => this.UsersService.updatePreferences(userId, preferences));
+  }
+
+  /**
+   * @openapi
+   * /users/{id}/preferences:
+   *   delete:
+   *     summary: Reset user preferences
+   *     tags:
+   *       - Users
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: integer
+   *         description: User ID
+   *     responses:
+   *       200:
+   *         description: Preferences reset
+   *       403:
+   *         description: Forbidden
+   *       404:
+   *         description: User not found
+   */
+  @Delete('/users/:id/preferences')
+  @authorize({ level: SecurityLevel.READER })
+  async resetPreferences(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const userId = parseInt(req.params.id, 10);
+
+    // Vérification que l'utilisateur réinitialise ses propres préférences ou est un admin
+    if (req.user?.id !== userId && (req.user?.level ?? -1) < SecurityLevel.ADMIN) {
+      return next(new ForbiddenError('You can only reset your own preferences'));
+    }
+
+    await this.pipe(res, req, next, () => this.UsersService.resetPreferences(userId));
   }
 }

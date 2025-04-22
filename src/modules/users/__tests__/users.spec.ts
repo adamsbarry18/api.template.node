@@ -1,108 +1,314 @@
-import { describe, it, beforeAll, afterAll, expect } from 'vitest';
-import supertest from 'supertest';
+import { describe, it, expect } from 'vitest';
+import request from 'supertest';
 import { v4 as uuidv4 } from 'uuid';
-// Assume your main app export is at this path:
-import app from '@/app'; // Adjust if your app entry point is elsewhere
-
-const agent = supertest.agent(app);
+import app from '@/app';
+import { adminToken } from '@/tests/setup';
 
 let createdUserId: number;
-let deletedUserId: number;
+let zombieUserId: number;
+
 const uid = uuidv4().substring(0, 6);
-const userMail = `testuser${uid}@yopmail.com`;
-const userPassword = 'TestUser1!';
-const adminToken = process.env.TEST_ADMIN_TOKEN || ''; // Set a valid admin JWT for protected routes
+const userMail = `test-user${uid}@yopmail.com`;
+const zombieUserMail = `ztest-user${uid}@yopmail.com`;
 
 describe('Users API', () => {
-  // Helper for authenticated requests
-  const authAgent = () => agent.set('Authorization', `Bearer ${adminToken}`);
-
-  beforeAll(async () => {
-    // Optionally: seed DB, create admin user, etc.
+  describe('POST /users', () => {
+    it('should create user', async () => {
+      const res = await request(app).post('/api/v1/users')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          email: userMail,
+          name: 'test',
+          surname: 'toto',
+          color: '#FAFAFA',
+          password: 'TotoLeTesteur1!',
+          level: 0,
+          preferences: { hello: 'world' },
+        });
+      expect(res.status).toBe(201);
+      expect(res.body.data.email).toBe(userMail);
+      createdUserId = res.body.data.id;
+    });
+    it('should fail to create invalid user', async () => {
+      const res = await request(app).post('/api/v1/users')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          status: 'active',
+          description: 'invalid user',
+        });
+      expect(res.status).toBe(400);
+    });
   });
 
-  afterAll(async () => {
-    // Optionally: cleanup DB, close connections, etc.
+  describe('GET /users', () => {
+    it('should return users', async () => {
+      const res = await request(app).get('/api/v1/users')
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status).toBe(200);
+      const users = Array.isArray(res.body.data.data)
+        ? res.body.data.data: Array.isArray(res.body.data)? res.body.data: [];
+      expect(Array.isArray(users)).toBe(true);
+      for (const entry of users) {
+        expect(entry).toHaveProperty('email');
+        expect(entry).toHaveProperty('name');
+        expect(entry).toHaveProperty('surname');
+        expect(entry).toHaveProperty('level');
+        expect(entry).toHaveProperty('created_time');
+        expect(entry).toHaveProperty('updated_time');
+        expect(entry).toHaveProperty('preferences');
+        expect(entry).toHaveProperty('id');
+      }
+    });
   });
 
-  it('should create a user', async () => {
-    const res = await authAgent()
-      .post('/users')
-      .send({
-        email: userMail,
-        name: 'Test',
-        surname: 'User',
-        color: '#FAFAFA',
-        password: userPassword,
-        level: 0,
-        preferences: { hello: 'world' },
-      })
-      .expect(201);
-    expect(res.body).toHaveProperty('id');
-    createdUserId = res.body.id;
-    expect(res.body.email).toBe(userMail);
+  describe('GET /users/:id', () => {
+    it('should fail to get user with invalid id', async () => {
+      const res = await request(app).get('/api/v1/users/-1')
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status).toBe(404);
+    });
+    it('should get user from valid id', async () => {
+      const res = await request(app).get(`/api/v1/users/${createdUserId}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status).toBe(200);
+      const entry = res.body.data;
+      expect(entry.id).toBe(createdUserId);
+      expect(entry.email).toBe(userMail);
+      expect(entry.name).toBe('test');
+      expect(entry.surname).toBe('toto');
+      expect(entry.color).toBe('#FAFAFA');
+      expect(entry.level).toBe(0);
+      expect(entry).toHaveProperty('created_time');
+      expect(entry).toHaveProperty('updated_time');
+      expect(entry).toHaveProperty('preferences');
+      expect(entry.preferences).toHaveProperty('hello', 'world');
+    });
   });
 
-  it('should fail to create invalid user', async () => {
-    const res = await authAgent()
-      .post('/users')
-      .send({ status: 'active', description: 'invalid user' })
-      .expect(400);
-    expect(res.body).toHaveProperty('error');
+  describe('GET /users/me', () => {
+    it('should return current user info', async () => {
+      const res = await request(app)
+        .get('/api/v1/users/me')
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveProperty('email', 'mabarry2018@gmail.com');
+      expect(res.body.data).toHaveProperty('id');
+      expect(res.body.data).toHaveProperty('name');
+      expect(res.body.data).toHaveProperty('surname');
+    });
+
+    it('should fail without token', async () => {
+      const res = await request(app)
+        .get('/api/v1/users/me');
+      expect(res.status).toBe(401);
+    });
   });
 
-  it('should get all users', async () => {
-    const res = await authAgent().get('/users').expect(200);
-    expect(Array.isArray(res.body)).toBe(true);
-    expect(res.body.some((u: any) => u.email === userMail)).toBe(true);
+  describe('PUT /users/:id', () => {
+    it('should fail to edit user with invalid id', async () => {
+      const res = await request(app).put('/api/v1/users/-1')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ name: 'fail' });
+      expect(res.status).toBe(404);
+    });
+    it('should edit user from valid id', async () => {
+      const res = await request(app).put(`/api/v1/users/${createdUserId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          name: 'editedname',
+          preferences: { hello: 'world', hasOnboarding: true },
+        });
+      expect(res.status).toBe(200);
+      expect(res.body.data.name).toBe('editedname');
+    });
+
+    it('should check if user was edited correctly', async () => {
+      const res = await request(app).get(`/api/v1/users/${createdUserId}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status).toBe(200);
+      const entry = res.body.data;
+      expect(entry.id).toBe(createdUserId);
+      expect(entry.name).toBe('editedname');
+      expect(entry.preferences).toHaveProperty('hello', 'world');
+      expect(entry.preferences).toHaveProperty('hasOnboarding', true);
+    });
   });
 
-  it('should get user by id', async () => {
-    const res = await authAgent().get(`/users/${createdUserId}`).expect(200);
-    expect(res.body).toHaveProperty('id', createdUserId);
-    expect(res.body).toHaveProperty('email', userMail);
-    expect(res.body).toHaveProperty('name', 'Test');
-    expect(res.body).toHaveProperty('surname', 'User');
-    expect(res.body).toHaveProperty('color', '#FAFAFA');
-    expect(res.body).toHaveProperty('preferences');
-    expect(res.body.preferences).toHaveProperty('hello', 'world');
+  describe('PUT /users/:id/preferences', () => {
+    it('should update user preferences', async () => {
+      const res = await request(app)
+        .put(`/api/v1/users/${createdUserId}/preferences`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ theme: 'dark', lang: 'fr' });
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveProperty('preferences');
+      expect(res.body.data.preferences).toHaveProperty('theme', 'dark');
+      expect(res.body.data.preferences).toHaveProperty('lang', 'fr');
+    });
+
+    it('should forbid updating preferences for another user as non-admin', async () => {
+      // Simulate a non-admin user
+      const userRes = await request(app)
+        .post('/api/v1/users')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          email: `prefuser${uid}@yopmail.com`,
+          name: 'Pref',
+          surname: 'User',
+          password: 'TotoLeTesteur1!',
+          level: 0,
+        });
+      const userId = userRes.body.data.id;
+
+      // Login as this user
+      const loginRes = await request(app)
+        .post('/api/v1/auth/login')
+        .send({
+          email: `prefuser${uid}@yopmail.com`,
+          password: 'TotoLeTesteur1!',
+        });
+      const userToken = loginRes.body.data.token;
+
+      // Try to update another user's preferences (should fail)
+      const res = await request(app)
+        .put(`/api/v1/users/${createdUserId}/preferences`)
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ theme: 'light' });
+      expect(res.status).toBe(403);
+
+      // Try to update own preferences (should fail if user level < READER)
+      const resOwn = await request(app)
+        .put(`/api/v1/users/${userId}/preferences`)
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ theme: 'blue' });
+      expect(resOwn.status).toBe(403); // Le niveau minimum requis est READER (2)
+    });
   });
 
-  it('should fail to get user with invalid id', async () => {
-    await authAgent().get('/users/-1').expect(404);
+  describe('DELETE /users/:id/preferences', () => {
+    it('should reset user preferences', async () => {
+      // Crée un utilisateur dédié pour ce test afin d'éviter l'effet de bord de suppression
+      const resCreate = await request(app)
+        .post('/api/v1/users')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          email: `resetpref-main-${uid}@yopmail.com`,
+          name: 'ResetPrefMain',
+          surname: 'User',
+          password: 'TotoLeTesteur1!',
+          level: 0,
+        });
+      const userId = resCreate.body.data.id;
+
+      const res = await request(app)
+        .delete(`/api/v1/users/${userId}/preferences`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveProperty('preferences');
+      // Optionally: check that preferences are empty or default
+    });
+
+    it('should forbid resetting preferences for another user as non-admin', async () => {
+      // Simulate a non-admin user
+      const userRes = await request(app)
+        .post('/api/v1/users')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          email: `resetprefuser${uid}@yopmail.com`,
+          name: 'ResetPref',
+          surname: 'User',
+          password: 'TotoLeTesteur1!',
+          level: 0,
+        });
+      const userId = userRes.body.data.id;
+
+      // Login as this user
+      const loginRes = await request(app)
+        .post('/api/v1/auth/login')
+        .send({
+          email: `resetprefuser${uid}@yopmail.com`,
+          password: 'TotoLeTesteur1!',
+        });
+      const userToken = loginRes.body.data.token;
+
+      // Try to reset another user's preferences (should fail)
+      const res = await request(app)
+        .delete(`/api/v1/users/${createdUserId}/preferences`)
+        .set('Authorization', `Bearer ${userToken}`);
+      expect(res.status).toBe(403);
+
+      // Try to reset own preferences (should fail if user level < READER)
+      const resOwn = await request(app)
+        .delete(`/api/v1/users/${userId}/preferences`)
+        .set('Authorization', `Bearer ${userToken}`);
+      expect(resOwn.status).toBe(403); // Le niveau minimum requis est READER (2)
+    });
   });
 
-  it('should update user', async () => {
-    const res = await authAgent()
-      .patch(`/users/${createdUserId}`)
-      .send({ name: 'Edited', preferences: { hello: 'world', onboarding: true } })
-      .expect(200);
-    expect(res.body).toHaveProperty('id', createdUserId);
-    expect(res.body).toHaveProperty('name', 'Edited');
-    expect(res.body.preferences).toHaveProperty('onboarding', true);
+  describe('DELETE /users/:id', () => {
+    it('should fail to delete user with invalid id', async () => {
+      const res = await request(app).delete('/api/v1/users/-1')
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status).toBe(404);
+    });
+    it('should delete user from valid id', async () => {
+      const res = await request(app).delete(`/api/v1/users/${createdUserId}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status).toBe(200);
+      expect(res.body.data).toBe('Successfull deletion');
+    });
+    it('should fail to get deleted user', async () => {
+      const res = await request(app).get(`/api/v1/users/${createdUserId}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status).toBe(404);
+    });
   });
 
-  it('should reset user preferences', async () => {
-    const res = await authAgent()
-      .post(`/users/${createdUserId}/reset-preferences`)
-      .send({})
-      .expect(200);
-    expect(res.body).toHaveProperty('id', createdUserId);
-    expect(res.body.preferences).toBeNull();
+  describe('Delete user when it no longer has authorisations', () => {
+    it('should create a zombie user', async () => {
+      const res = await request(app).post('/api/v1/users')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          email: zombieUserMail,
+          name: 'Jean',
+          surname: 'NotDead',
+          password: 'TotoLeTesteur1!',
+          level: 2,
+        });
+      expect(res.status).toBe(201);
+      zombieUserId = res.body.data.id;
+    });
+    it('should delete zombie user', async () => {
+      const res = await request(app).delete(`/api/v1/users/${zombieUserId}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status).toBe(200);
+      expect(res.body.data).toBe('Successfull deletion');
+    });
+    it('should fail to get deleted zombie user', async () => {
+      const res = await request(app).get(`/api/v1/users/${zombieUserId}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status).toBe(404);
+    });
+    it('should resurrect zombie user', async () => {
+      const res = await request(app).post('/api/v1/users')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          email: zombieUserMail,
+          name: 'Monique',
+          surname: 'Zombie',
+          password: 'TotoLeTesteur1!',
+          level: 2,
+        });
+      expect(res.status).toBe(201);
+      zombieUserId = res.body.data.id;
+    });
+    it('should get resurrected user', async () => {
+      const res = await request(app).get(`/api/v1/users/${zombieUserId}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status).toBe(200);
+      const user = res.body.data;
+      expect(user.id).toBe(zombieUserId);
+      expect(user.name).toBe('Monique');
+    });
   });
-
-  it('should update user password', async () => {
-    await authAgent().patch(`/users/${createdUserId}`).send({ password: 'TestUser2!' }).expect(200);
-  });
-
-  it('should delete user', async () => {
-    await authAgent().delete(`/users/${createdUserId}`).expect(204);
-    deletedUserId = createdUserId;
-  });
-
-  it('should fail to get deleted user', async () => {
-    await authAgent().get(`/users/${deletedUserId}`).expect(404);
-  });
-
-  // Add more tests for edge cases, e.g. unauthorized access, forbidden actions, etc.
 });

@@ -11,7 +11,6 @@ import {
   BeforeSoftRemove,
   AfterSoftRemove,
 } from 'typeorm';
-import { ValidationError } from '@/common/errors/httpErrors';
 import { getRedisClient } from '@/lib/redis';
 import logger from '@/lib/logger';
 
@@ -25,16 +24,16 @@ interface IModelDiff {
  */
 export abstract class Model extends BaseEntity {
   @PrimaryGeneratedColumn({ name: 'id' })
-  id: number;
+  id!: number;
 
   @CreateDateColumn({ type: 'timestamp', name: 'created_time' })
-  createdAt: Date;
+  createdAt!: Date;
 
   @UpdateDateColumn({ type: 'timestamp', name: 'updated_time' })
-  updatedAt: Date;
+  updatedAt!: Date;
 
   @DeleteDateColumn({ type: 'timestamp', name: 'deleted_time', nullable: true })
-  deletedAt: Date | null;
+  deletedAt!: Date | null;
 
   // Propriétés statiques
   static entityTrackedFields: string[] = [];
@@ -173,12 +172,5 @@ export abstract class Model extends BaseEntity {
   @AfterSoftRemove()
   protected async afterSoftRemove(): Promise<void> {
     await this.invalidateCache();
-  }
-
-  /**
-   * Crée une erreur de validation formatée
-   */
-  static createValidationError(errors: string[]): Error {
-    return new ValidationError('Validation Failed', errors);
   }
 }

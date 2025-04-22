@@ -9,36 +9,47 @@ import passport from 'passport';
 import { NextFunction, Request, Response } from '@/config/http';
 import {
   ForbiddenError,
-  InternalServerError,
   UnauthorizedError,
-  HttpError,
   ServiceUnavailableError,
   ValidationError,
+  ServerError,
+  BaseError,
 } from '@/common/errors/httpErrors';
 import logger from '@/lib/logger';
 import { CustomJwtPayload } from '@/common/types';
 import { AuthenticatedUser } from '@/config/http';
 import config from '@/config';
-import { AuthService } from '@/modules/auth/services/auth.services';
-import { UsersService } from '@/modules/users/services/users.services';
 
-const options: StrategyOptions = {
+import { UsersService } from '@/modules/users/services/users.services';
+import { LoginService } from '@/modules/auth/services/login.services';
+import { AuthorizationService } from '@/modules/auth/services/authorization.service';
+
+type StrategyOptionsWithRequest = StrategyOptions & {
+  passReqToCallback: true;
+};
+
+const options: StrategyOptionsWithRequest = {
   jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
   secretOrKey: config.JWT_SECRET,
   passReqToCallback: true,
 };
 
-const authService = new AuthService();
-const userService = new UsersService();
+const loginService = LoginService.getInstance();
+const userService = UsersService.getInstance();
+const authorizationService = AuthorizationService.getInstance();
 
-export const initializePassportAuthentication = (): void => {
+// Use a standard function declaration for export
+export function passportAuthenticationMiddleware(): void {
   passport.use(
     new JwtStrategy(
       options,
       async (req: Request, payload: CustomJwtPayload, done: VerifiedCallback) => {
-        const rawToken = ExtractJwt.fromAuthHeaderAsBearerToken()(req as any);
+        const rawToken = ExtractJwt.fromAuthHeaderAsBearerToken()(req);
+        if (!rawToken) {
+          return done(null, false, { message: 'No Bearer token provided.' });
+        }
         try {
-          if (await authService.isTokenInvalidated(rawToken)) {
+          if (await loginService.isTokenInvalidated(rawToken)) {
             return done(null, false, { message: 'Token invalidated or expired.' });
           }
 
@@ -52,7 +63,7 @@ export const initializePassportAuthentication = (): void => {
             return done(null, authenticatedUser);
           } else {
             logger.warn(`User not found (ID: ${userId}) for active token. Invalidating token.`);
-            authService
+            loginService
               .logout(rawToken)
               .catch((err) => logger.error(err, 'Error during automatic token logout.'));
             return done(null, false, { message: 'User not found or disabled.' });
@@ -69,7 +80,7 @@ export const initializePassportAuthentication = (): void => {
   );
 
   logger.info('Passport JWT strategy configured (token + Redis invalidation check).');
-};
+}
 
 /**
  * Middleware: requireAuth
@@ -81,9 +92,9 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction): vo
     { session: false },
     (err: any, user: AuthenticatedUser | false, info: any) => {
       if (err) {
-        if (err instanceof HttpError) return next(err);
+        if (err instanceof BaseError) return next(err);
         logger.error(err, 'Internal error during Passport authentication.');
-        return next(new InternalServerError('Authentication processing error.', err));
+        return next(new ServerError('Authentication processing error.'));
       }
       if (!user) {
         const message = info?.message || 'Unauthorized access';
@@ -137,7 +148,11 @@ export const requirePermission =
       return next(new UnauthorizedError('Authentication required to check permissions.'));
     }
     try {
-      const hasPerm = await authService.checkAuthorisation(req.user.id, featureName, actionName);
+      const hasPerm = await authorizationService.checkAuthorisation(
+        req.user.id,
+        featureName,
+        actionName,
+      );
       if (!hasPerm) {
         logger.warn(
           `Access denied: User ${req.user.id} lacks permission ${featureName}:${actionName}. URL: ${req.originalUrl}`,
@@ -152,9 +167,9 @@ export const requirePermission =
         `Error during permission check (${featureName}:${actionName}) for user ${req.user.id}.`,
       );
       next(
-        error instanceof HttpError
+        error instanceof BaseError
           ? error
-          : new InternalServerError('Error processing permissions.', error),
+          : new ServerError(`Error processing permissions. ${error}`),
       );
     }
   };
@@ -181,7 +196,7 @@ export const validateRequest =
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        next(new ValidationError('Validation failed', error.format()));
+        next(new ValidationError(JSON.stringify(error.format())));
       } else {
         next(error);
       }

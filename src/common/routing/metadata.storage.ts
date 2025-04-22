@@ -1,6 +1,6 @@
 import { AnyZodObject } from 'zod';
 import { RequestHandler } from 'express';
-import { AuthorisationRule } from '@/modules/users/models/users.types';
+import { AuthorisationRule } from '@/modules/users/models/users.entity';
 
 /** Defines the allowed HTTP methods for routes. */
 export type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
@@ -56,11 +56,22 @@ export class MetadataStorage {
 
   /**
    * Retrieves all route metadata associated with a specific controller class constructor.
+   * Fuses partial metadata for the same handler (from multiple decorators).
    * @param {Function} target The controller class constructor.
    * @returns {RouteMetadataArgs[]} An array of route metadata for the target class.
    */
   getRoutesForTarget(target: Function): RouteMetadataArgs[] {
-    return this.routes.filter((route) => route.target === target);
+    // Fusionne toutes les metadata pour chaque handlerName
+    const grouped = new Map<string | symbol, RouteMetadataArgs>();
+    for (const meta of this.routes.filter((route) => route.target === target)) {
+      const key = meta.handlerName;
+      if (!grouped.has(key)) {
+        grouped.set(key, { ...meta });
+      } else {
+        Object.assign(grouped.get(key)!, meta);
+      }
+    }
+    return Array.from(grouped.values());
   }
 
   /**

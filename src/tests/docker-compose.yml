@@ -1,44 +1,43 @@
-version: '3.8'
-
 services:
-  db:
-    image: mysql:8
-    restart: always
+  mysql-test:
+    image: mysql:8.0
+    container_name: mysql-test
     environment:
-      MYSQL_ROOT_PASSWORD: rootpass
-      MYSQL_DATABASE: testdb
-      MYSQL_USER: testuser
-      MYSQL_PASSWORD: testpass
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: test_db
+      MYSQL_USER: test_user
+      MYSQL_PASSWORD: test_pwd
     ports:
       - "3307:3306"
-    command: --default-authentication-plugin=mysql_native_password
     volumes:
-      - ./data:/var/lib/mysql
-      - ./data/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
-      - ./data/datas.sql:/docker-entrypoint-initdb.d/02-datas.sql
+      - db-data:/var/lib/mysql
+      - ./db-data:/docker-entrypoint-initdb.d
+    networks:
+      - test_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
-  redis:
-    image: redis:7
-    restart: always
+  redis-test:
+    image: redis:7-alpine
+    container_name: redis-test
     ports:
       - "6380:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - test_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # Uncomment and configure if you want to run your API in the same compose
-  # api:
-  #   build:
-  #     context: ../..
-  #     dockerfile: Dockerfile
-  #   environment:
-  #     NODE_ENV: test
-  #     DB_HOST: db
-  #     DB_PORT: 3306
-  #     DB_USER: testuser
-  #     DB_PASSWORD: testpass
-  #     DB_DATABASE: testdb
-  #     REDIS_HOST: redis
-  #     REDIS_PORT: 6379
-  #   depends_on:
-  #     - db
-  #     - redis
-  #   ports:
-  #     - "3001:3000"
+volumes:
+  db-data:
+  redis_data:
+
+networks:
+  test_network:

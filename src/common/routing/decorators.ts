@@ -1,8 +1,8 @@
 import { AnyZodObject } from 'zod';
 import { globalMetadataStorage, HttpMethod } from './metadata.storage';
 import { RequestHandler } from 'express';
-import { AuthorisationRule } from '@/modules/users/models/users.types';
-import logger from '@/lib/logger';
+import { AuthorisationRule } from '@/modules/users/models/users.entity';
+import logger from '../../lib/logger';
 
 /**
  * Decorator to define a route on a controller method.
@@ -10,7 +10,7 @@ import logger from '@/lib/logger';
  * @param {string} path Route path (e.g., '/:id').
  */
 export function route(method: HttpMethod, path: string): MethodDecorator {
-  return (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
+  return (target: any, propertyKey: string | symbol) => {
     globalMetadataStorage.addRoute({
       target: target.constructor, // Target the class constructor
       handlerName: propertyKey,

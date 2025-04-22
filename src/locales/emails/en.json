@@ -1,0 +1,14 @@
+{
+  "passwordChanged": {
+    "subject": "Your password has been changed",
+    "html": "<h2>Your password has been changed</h2><p>Hello {{name}},</p><p>Your password has been successfully updated. If you did not perform this change, please contact support immediately.</p>"
+  },
+  "passwordReset": {
+    "subject": "[{{app}}] Password Reset",
+    "html": "<h2>Password reset</h2><p>You requested to reset your password. Please click the following link:</p><p><a href=\"{{url}}\">{{url}}</a></p><p>This link expires in 3 days.</p><p>If you did not make this request, you can ignore this email.</p>"
+  },
+  "passwordConfirmation": {
+    "subject": "[{{app}}] Password confirmation",
+    "html": "<h2>Confirm your new password</h2><p>Please click the following link to confirm your password change:</p><p><a href=\"{{url}}\">{{url}}</a></p><p>This link expires in 3 days.</p>"
+  }
+}

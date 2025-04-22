@@ -1,11 +1,22 @@
 import { Request, Response, NextFunction } from '../../config/http';
-import { HttpError, InternalServerError } from '../errors/httpErrors';
+import {
+  Errors,
+  BaseError,
+  ServerError,
+  ValidationError,
+  NotFoundError,
+  ForbiddenError,
+  UnauthorizedError,
+  BadRequestError,
+  DependencyError,
+  ServiceUnavailableError,
+} from '../errors/httpErrors';
 import logger from '@/lib/logger';
 import config from '@/config';
 import { ZodError } from 'zod';
 
 export const errorHandler = (err: Error, req: Request, res: Response, next: NextFunction): void => {
-  let error: HttpError;
+  let error: BaseError;
 
   logger.error(
     {
@@ -22,45 +33,79 @@ export const errorHandler = (err: Error, req: Request, res: Response, next: Next
 
   // Specific handling for Zod errors to provide better client feedback.
   if (err instanceof ZodError) {
-    error = new HttpError(422, 'Validation failed', 'ERR_VALIDATION', err.format());
-  } else if (err instanceof HttpError) {
+    error = new ValidationError(err.errors.map((e) => e.message));
+  } else if (err instanceof BaseError) {
     error = err;
   } else {
-    error = new InternalServerError('An unexpected error occurred');
+    error = new ServerError('An unexpected error occurred');
   }
 
-  // Use res.jsend.error to send the standardized response.
-  // The logic for masking details in production is handled within the jsendMiddleware itself or here based on NODE_ENV.
+  // Unwrap nested BaseError if present in ServerError.data
+  if (error instanceof ServerError && error.data && typeof error.data === 'object') {
+    logger.error({ nestedData: error.data }, '[DEBUG] ServerError.data before unwrapping');
+    const nested = error.data as any;
+    if (
+      'status' in nested &&
+      typeof nested.status === 'number' &&
+      typeof nested.name === 'string' &&
+      typeof nested.message === 'string'
+    ) {
+      switch (nested.name) {
+        case 'ForbiddenError':
+          error = new ForbiddenError(nested.message);
+          break;
+        case 'NotFoundError':
+          error = new NotFoundError(nested.message);
+          break;
+        case 'UnauthorizedError':
+          error = new UnauthorizedError(nested.message);
+          break;
+        case 'BadRequestError':
+          error = new BadRequestError(nested.message);
+          break;
+        case 'DependencyError':
+          error = new DependencyError(nested.data ?? []);
+          break;
+        case 'ServiceUnavailableError':
+          error = new ServiceUnavailableError(nested.message);
+          break;
+        case 'ValidationError':
+          error = new ValidationError(nested.data ?? nested.message);
+          break;
+        default:
+          // fallback sur le status si le nom n'est pas explicite
+          if (nested.status === 403) error = new ForbiddenError(nested.message);
+          else if (nested.status === 404) error = new NotFoundError(nested.message);
+          else if (nested.status === 401) error = new UnauthorizedError(nested.message);
+          else if (nested.status === 400) error = new BadRequestError(nested.message);
+          else if (nested.status === 422)
+            error = new ValidationError(nested.data ?? nested.message);
+          else if (nested.status === 503) error = new ServiceUnavailableError(nested.message);
+          else error = new BaseError('ERR_OTHER', nested.message, nested.data ?? null);
+      }
+    }
+    logger.error({ unwrappedError: error }, '[DEBUG] Error after unwrapping');
+  }
 
-  // Set the HTTP status before calling jsend.error.
-  res.status(error.status);
-
-  // Build the error object for the JSend response.
+  // Build the error object for the error response.
   const errorPayload = {
+    httpStatus: error.status,
     message:
       config.NODE_ENV === 'production' && error.status === 500
-        ? 'Internal Server Error' // Mask internal server error messages in production.
+        ? 'Internal Server Error'
         : error.message,
     code: error.code,
-    // Include 'data' only if present and relevant (e.g., validation errors) or in development.
     data:
       config.NODE_ENV !== 'production' || error.name === 'ValidationError' ? error.data : undefined,
-    // Include stack trace only in development.
     stack: config.NODE_ENV !== 'production' ? err.stack : undefined,
   };
 
-  // Filter out undefined keys (like stack in production).
-  Object.keys(errorPayload).forEach(
-    (key) => errorPayload[key] === undefined && delete errorPayload[key],
-  );
+  Object.keys(errorPayload).forEach((key) => {
+    const k = key as keyof typeof errorPayload;
+    if (errorPayload[k] === undefined) {
+      delete errorPayload[k];
+    }
+  });
 
-  // Send the response via jsend.
-  // Ensure the Response type is extended to include jsend (typically done via http.ts or a global types file).
-  if (res.jsend && typeof res.jsend.error === 'function') {
-    res.jsend.error(errorPayload);
-  } else {
-    // Fallback if jsend is not attached (should not happen if middleware is correctly placed).
-    logger.warn('res.jsend.error was not available in errorHandler. Sending raw JSON.');
-    res.json({ status: 'error', ...errorPayload });
-  }
+  res.status(error.status).json({ status: 'error', ...errorPayload });
 };

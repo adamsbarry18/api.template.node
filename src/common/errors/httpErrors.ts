@@ -1,144 +1,165 @@
-import logger from '@/lib/logger';
-import { QueryFailedError } from 'typeorm';
+import type { DependentWrapper } from '../utils/Service';
 
-/**
- * Base class for custom HTTP errors.
- * Ensures errors have a status code, an optional application-specific error code,
- * and optional additional data.
- */
-export class HttpError extends Error {
-  public readonly status: number;
-  public readonly code: string;
-  public readonly data: unknown | null;
+// Add toJSON to Error prototype if not present
+if (!('toJSON' in Error.prototype)) {
+  Object.defineProperty(Error.prototype, 'toJSON', {
+    value() {
+      const alt: { [key: string]: any } = {};
+      Object.getOwnPropertyNames(this).forEach((key) => {
+        alt[key] = this[key];
+      }, this);
+      return alt;
+    },
+    configurable: true,
+    writable: true,
+  });
+}
+
+export enum ERROR_STATUS {
+  ERR_VALIDATION = 400,
+  ERR_BAD_REQUEST = 400,
+  ERR_PWD_IDENTICAL = 400,
+  ERR_DEPENDENCY = 400,
+  ERR_UNAUTHORIZED = 401,
+  ERR_PWD_EXPIRED = 403,
+  ERR_FORBIDDEN = 403,
+  ERR_NOT_FOUND = 404,
+  ERR_PWD_VALIDATING = 422,
+  ERR_OTHER = 500,
+  ERR_SERVER_ERROR = 500,
+  ERR_SERVICE_UNAVAILABLE = 503,
+}
+
+type ErrorCode = keyof typeof ERROR_STATUS;
+
+export class BaseError extends Error {
+  code: ErrorCode;
+  message: string;
+  status: number;
+  data: string | string[] | object | null;
 
   /**
-   * Creates an instance of HttpError.
-   * @param {number} status The HTTP status code.
-   * @param {string} message The error message.
-   * @param {string} [code] Optional application-specific error code.
-   * @param {unknown | null} [data=null] Optional additional data.
+   * Create a standard API error
+   * @param code ERROR_STATUS code
+   * @param message Error message
+   * @param data Special data to display
    */
-  constructor(status: number, message: string, code?: string, data: unknown | null = null) {
+  constructor(
+    code: ErrorCode = 'ERR_OTHER',
+    message = 'An error occurred...',
+    data: string | string[] | object | null = null,
+  ) {
     super(message);
-    this.status = status;
-    this.code = code || this.constructor.name;
+    this.code = code;
+    this.message = message;
+    this.status = ERROR_STATUS.hasOwnProperty(code) ? ERROR_STATUS[code] : 500;
     this.data = data;
     this.name = this.constructor.name;
-    Error.captureStackTrace(this, this.constructor);
+    delete this.stack; // Avoid leaking stack for those errors
   }
 }
 
-/**
- * Represents a 400 Bad Request error.
- */
-export class BadRequestError extends HttpError {
-  constructor(message = 'Bad Request', data: unknown | null = null) {
-    super(400, message, 'ERR_BAD_REQUEST', data);
+export class ValidationError extends BaseError {
+  data!: string | string[];
+  constructor(errors: string | string[]) {
+    super('ERR_VALIDATION', 'Validation error', errors);
   }
 }
 
-/**
- * Represents a 422 Unprocessable Entity error, typically used for validation failures.
- */
-export class ValidationError extends HttpError {
-  constructor(message = 'Validation Failed', errors: unknown | null) {
-    super(422, message, 'ERR_VALIDATION', errors);
+export class BadRequestError extends BaseError {
+  constructor(info: string | null = null) {
+    super('ERR_BAD_REQUEST', 'Bad request', info);
   }
 }
 
-/**
- * Represents a 401 Unauthorized error.
- */
-export class UnauthorizedError extends HttpError {
-  constructor(message = 'Unauthorized') {
-    super(401, message, 'ERR_UNAUTHORIZED');
+export class DependencyError extends BaseError {
+  data!: DependentWrapper[];
+  constructor(dependents: DependentWrapper[] = []) {
+    super('ERR_DEPENDENCY', 'Bad request', dependents);
   }
 }
 
-/**
- * Represents a 403 Forbidden error.
- */
-export class ForbiddenError extends HttpError {
-  constructor(message = 'Forbidden') {
-    super(403, message, 'ERR_FORBIDDEN');
+export class UnauthorizedError extends BaseError {
+  constructor(info: string | null = null) {
+    super('ERR_UNAUTHORIZED', 'Unauthorized', info);
   }
 }
 
-/**
- * Represents a 404 Not Found error.
- */
-export class NotFoundError extends HttpError {
-  constructor(message = 'Not Found') {
-    super(404, message, 'ERR_NOT_FOUND');
+export class ForbiddenError extends BaseError {
+  constructor(info: string | null = null) {
+    super('ERR_FORBIDDEN', 'Forbidden', info);
   }
 }
 
-/**
- * Represents a 409 Conflict error.
- */
-export class ConflictError extends HttpError {
-  constructor(message = 'Conflict', data: unknown | null = null) {
-    super(409, message, 'ERR_CONFLICT', data);
+export class NotFoundError extends BaseError {
+  constructor(info: string | null = null) {
+    super('ERR_NOT_FOUND', 'Not found', info);
   }
 }
 
-/**
- * Represents a 500 Internal Server Error.
- */
-export class InternalServerError extends HttpError {
-  constructor(message = 'Internal Server Error', data: unknown | null = null) {
-    super(500, message, 'ERR_INTERNAL_SERVER', data);
+export class ServerError extends BaseError {
+  constructor(info: string | object | null = null) {
+    super('ERR_SERVER_ERROR', 'Internal error', info);
   }
 }
 
-/**
- * Represents a 503 Service Unavailable error.
- */
-export class ServiceUnavailableError extends HttpError {
-  constructor(message = 'Service Unavailable') {
-    super(503, message, 'ERR_SERVICE_UNAVAILABLE');
+export class ServiceUnavailableError extends BaseError {
+  constructor(info: string | object | null = null) {
+    super('ERR_SERVICE_UNAVAILABLE', 'Service unavailable', info);
   }
 }
 
-/**
- * Utility class to handle common database errors and convert them into appropriate HttpError instances.
- */
-export class DatabaseErrorHandler {
-  /**
-   * Handles database-related errors, attempting to convert them into specific HttpError instances.
-   * Logs the original error and throws a specific HttpError (ConflictError, ValidationError, or InternalServerError).
-   * This method never returns normally, it always throws.
-   *
-   * @param {any} error The original error object caught (can be of any type).
-   * @param {string} context A string describing the context where the error occurred (e.g., 'UserRepository.createUser').
-   * @throws {HttpError} Throws ConflictError, ValidationError, or InternalServerError.
-   */
-  static handle(error: any, context: string): never {
-    logger.error(
-      { err: error, dbContext: context },
-      `Database error occurred in context: ${context}`,
-    );
-    if (error instanceof QueryFailedError) {
-      if (
-        error.driverError?.code === '23505' ||
-        error.message.includes('unique constraint') ||
-        error.message.includes('duplicate key')
-      ) {
-        throw new ConflictError(
-          `Resource already exists due to unique constraint violation in ${context}.`,
-          {
-            context,
-            detail: error.message,
-          },
-        );
-      }
+export enum AUTHENTICATE_ERRORS {
+  PASSWORD_VALIDATING = 'PASSWORD VALIDATING',
+  PASSWORD_EXPIRED = 'PASSWORD EXPIRED',
+  PASSWORD_IDENTICAL = 'PASSWORD_IDENTICAL',
+}
+
+export class AuthenticateError extends BaseError {
+  constructor(message: AUTHENTICATE_ERRORS | string) {
+    if (message === AUTHENTICATE_ERRORS.PASSWORD_VALIDATING) {
+      super('ERR_PWD_VALIDATING', message);
+    } else if (message === AUTHENTICATE_ERRORS.PASSWORD_EXPIRED) {
+      super('ERR_PWD_EXPIRED', message);
+    } else if (message === AUTHENTICATE_ERRORS.PASSWORD_IDENTICAL) {
+      super('ERR_PWD_IDENTICAL', message);
+    } else {
+      super('ERR_OTHER', message);
     }
-    if (error instanceof ValidationError) {
-      throw error;
-    }
-    throw new InternalServerError(`Database operation failed in context: ${context}`, {
-      context,
-      originalError: error instanceof Error ? error.message : String(error), // Extract message safely
-    });
   }
 }
+
+export const PARAMETER_ERRORS = {
+  PASSWORD_IDENTICAL: 'PASSWORD_IDENTICAL',
+};
+
+export class ParameterError extends Error {
+  code?: string;
+  status?: number;
+
+  constructor(message: string) {
+    // Calling parent constructor of base Error class.
+    super(message);
+
+    if (message === PARAMETER_ERRORS.PASSWORD_IDENTICAL) {
+      this.code = 'ERR_PWD_IDENTICAL';
+      this.status = 400;
+    }
+
+    // Saving class name in the property of our custom error as a shortcut.
+    this.name = this.constructor.name;
+  }
+}
+
+export const Errors = {
+  BaseError,
+  ServerError,
+  AuthenticateError,
+  DependencyError,
+  BadRequestError,
+  NotFoundError,
+  ValidationError,
+  UnauthorizedError,
+  ForbiddenError,
+  ServiceUnavailableError,
+};

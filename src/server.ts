@@ -1,20 +1,19 @@
-// src/server.ts
 import http from 'http';
 import os from 'os';
 
-import app from './app'; // Assurez-vous que app.ts est bien à la racine de src
-import config from './config'; // Chemin corrigé
-import logger from './lib/logger'; // Chemin corrigé
-import { AppDataSource } from './database/data-source'; // Chemin corrigé
-import { initializeRedis, getRedisClient } from './lib/redis'; // Chemin corrigé
-// import { KeycloakService } from './lib/keycloak.service'; // Si utilisé
+import app from './app'; 
+import config from './config'; 
+import logger from './lib/logger'; 
+import { AppDataSource } from './database/data-source'; 
+import { initializeRedis, getRedisClient } from './lib/redis';
+
 
 const hostname = os.hostname();
-const READINESS_PROBE_DELAY_MS = 15 * 1000; // Renommé pour clarté (millisecondes)
-const SHUTDOWN_TIMEOUT_MS = 10 * 1000; // Timeout pour forcer l'arrêt si graceful shutdown prend trop de temps
+const READINESS_PROBE_DELAY_MS = 15 * 1000; 
+const SHUTDOWN_TIMEOUT_MS = 10 * 1000; 
 
 let server: http.Server;
-let isShuttingDown = false; // Flag pour éviter les arrêts multiples
+let isShuttingDown = false; 
 
 // --- Gestion Globale des Erreurs Processus Node ---
 process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
@@ -56,35 +55,14 @@ async function initializeExternalConnections(): Promise<void> {
     try {
       await initializeRedis();
       if (getRedisClient()?.isOpen) {
-        // Vérifier si la connexion est ouverte
         logger.info('✅ Redis connection initialized successfully.');
       } else {
         logger.warn('⚠️ Redis connection failed or unavailable during initialization.');
       }
     } catch (redisError: unknown) {
       logger.error({ err: redisError }, '❌ Error during Redis initialization.');
-      // Ne pas bloquer le démarrage, mais logger l'erreur
     }
 
-    // 3. Autres initialisations (Keycloak, AWS SDK, etc.)
-    // ... (ajouter ici si nécessaire, gérer les erreurs de manière appropriée)
-    /* Exemple Keycloak:
-    if (config.KEYCLOAK_ENABLED) {
-        try {
-            const keycloakServiceInstance = await KeycloakService.getInstance();
-            await keycloakServiceInstance.initialize(); // Assumer qu'initialize gère la redondance
-            if (keycloakServiceInstance.isServiceReady()) {
-                logger.info('✅ Keycloak Service initialized and ready.');
-            } else {
-                 logger.warn('⚠️ Keycloak Service failed to initialize.');
-            }
-        } catch (keycloakError: unknown) {
-            logger.error({ err: keycloakError }, '❌ Error during Keycloak Service initialization.');
-        }
-    } else {
-        logger.info('ℹ️ Keycloak integration is disabled.');
-    }
-    */
 
     logger.info('External connections initialization complete.');
   } catch (error: unknown) {
@@ -92,7 +70,7 @@ async function initializeExternalConnections(): Promise<void> {
       { err: error },
       '❌ Critical error during external connections initialization. Exiting.',
     );
-    throw error; // Relancer pour être attrapé par le startServer catch
+    throw error; 
   }
 }
 
@@ -178,18 +156,18 @@ async function startServer(): Promise<void> {
     `🚀 Starting Application [${config.NODE_ENV}] on ${hostname} (PID: ${process.pid})...`,
   );
   logger.info('=======================================================');
+  
 
   // Initialiser les connexions externes AVANT de démarrer le serveur HTTP
   await initializeExternalConnections();
 
-  // Créer et démarrer le serveur HTTP
   server = http.createServer(app);
 
   server.on('error', (error: NodeJS.ErrnoException) => {
     logger.fatal({ err: error }, '❌ HTTP server error');
     if (error.syscall !== 'listen') {
-      gracefulShutdown('serverError').catch(() => process.exit(1)); // Tenter un arrêt propre
-      return; // Ne pas continuer si ce n'est pas une erreur d'écoute
+      gracefulShutdown('serverError').catch(() => process.exit(1)); 
+      return; 
     }
     switch (error.code) {
       case 'EACCES':
@@ -201,21 +179,21 @@ async function startServer(): Promise<void> {
       default:
         logger.fatal(`Unhandled listen error: ${error.code}. Exiting.`);
     }
-    process.exit(1); // Quitter immédiatement pour les erreurs d'écoute critiques
+    process.exit(1); 
   });
 
   server.listen(config.PORT, config.HOST, () => {
+    const redisClient = getRedisClient();
+    const apiUrl = config.API_URL || `http://${config.HOST}:${config.PORT}`;
+
     logger.info('=======================================================');
     logger.info(`✅ Server listening on http://${config.HOST}:${config.PORT}`);
-    logger.info(
-      `✅ API Docs available at ${config.API_URL || `http://${config.HOST}:${config.PORT}`}/api-docs`,
-    );
+    logger.info(`✅ API Docs available at ${apiUrl}/api-docs`);
     logger.info(`   Environment: ${config.NODE_ENV}`);
-    const redisClient = getRedisClient();
-    logger.info(`   Redis: ${redisClient?.isOpen ? 'Connected' : 'Disconnected'}`);
-    // logger.info(`   Keycloak: ${keycloakServiceInstance?.isServiceReady() ? 'Ready' : (config.KEYCLOAK_ENABLED ? 'Not Ready' : 'Disabled')}`);
+    logger.info(`   Database: ${config.DB_TYPE} on ${config.DB_HOST}:${config.DB_PORT}:${config.DB_NAME} (${AppDataSource.isInitialized ? 'Connected' : 'Disconnected'})`);
+    logger.info(`   Redis: ${redisClient?.isOpen ? 'Connected' : 'Disconnected'} to ${config.REDIS_HOST}:${config.REDIS_PORT}`);
     logger.info('=======================================================');
-    // setStatus('running'); // Si vous avez un système de statut
+    
   });
 
   // Attacher les handlers de signaux pour le graceful shutdown
