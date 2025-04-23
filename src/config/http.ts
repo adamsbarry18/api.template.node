@@ -15,6 +15,7 @@ declare global {
       authToken?: string | null;
       token?: JwtPayload;
       tokenClientId?: string;
+      sub?: number; // <-- Ajout pour supporter le champ "sub" du JWT
     }
 
     /**

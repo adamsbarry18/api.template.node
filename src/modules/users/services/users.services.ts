@@ -37,7 +37,9 @@ export class UsersService {
   }
 
   /**
-   * Convertit une entité User en objet de réponse API
+   * Maps a User entity to an API response object.
+   * @param user The user entity to map.
+   * @returns The mapped API response or null if user is null.
    */
   mapToApiResponse(user: User | null): UserApiResponse | null {
     if (!user) return null;
@@ -48,15 +50,16 @@ export class UsersService {
   }
 
   /**
-   * Récupère un utilisateur par son ID
+   * Retrieves a user by their ID.
+   * @param id The user ID.
+   * @param options Optional request context.
+   * @returns The user API response.
    */
   async findById(
     id: number,
     options?: { requestingUser?: Request['user'] },
   ): Promise<UserApiResponse> {
     const requestingUser = options?.requestingUser;
-
-    // Vérification des droits : seulement soi-même ou un admin peut accéder
     if (requestingUser) {
       const isSelf = requestingUser.id === id;
       const isAdmin = requestingUser.level >= SecurityLevel.ADMIN;
@@ -64,7 +67,6 @@ export class UsersService {
         throw new ForbiddenError('You do not have permission to access this user.');
       }
     }
-
     try {
       const user = await this.userRepository.findById(id);
       if (!user) throw new NotFoundError(`User with id ${id} not found.`);
@@ -78,7 +80,9 @@ export class UsersService {
   }
 
   /**
-   * Récupère un utilisateur par son email
+   * Retrieves a user by their email.
+   * @param email The user's email address.
+   * @returns The user API response.
    */
   async findByEmail(email: string): Promise<UserApiResponse> {
     try {
@@ -91,7 +95,9 @@ export class UsersService {
   }
 
   /**
-   * Récupère un utilisateur par email pour l'authentification (avec mot de passe)
+   * Retrieves a user by email for authentication, including password.
+   * @param email The user's email address.
+   * @returns The user entity or null if not found.
    */
   async findByEmailForAuth(email: string): Promise<User | null> {
     try {
@@ -103,7 +109,9 @@ export class UsersService {
   }
 
   /**
-   * Récupère tous les utilisateurs, avec filtrage selon les droits du demandeur
+   * Retrieves all users, filtered by the requesting user's rights.
+   * @param options Optional request context.
+   * @returns Array of user API responses.
    */
   async findAll(options?: { requestingUser?: Request['user'] }): Promise<UserApiResponse[]> {
     try {
@@ -111,7 +119,6 @@ export class UsersService {
       if (options?.requestingUser && !options.requestingUser.internal) {
         where.internal = false;
       }
-
       const { users } = await this.userRepository.findAll({ where });
       return users.map((user) => this.mapToApiResponse(user)!);
     } catch (error) {
@@ -120,53 +127,45 @@ export class UsersService {
   }
 
   /**
-   * Crée un nouvel utilisateur ou réactive un utilisateur supprimé précédemment
+   * Creates a new user or reactivates a previously deleted user.
+   * @param input The user creation input.
+   * @param options Optional request context.
+   * @returns The created or reactivated user API response.
    */
   async create(
     input: CreateUserInput,
     options?: { requestingUser?: Request['user'] },
   ): Promise<UserApiResponse> {
     const { password, email, permissions, permissionsExpireAt, ...restData } = input;
-
-    // Vérification champs obligatoires
     if (!email) {
       throw new BadRequestError('Email is required.');
     }
     if (!password) {
       throw new BadRequestError('Password is required.');
     }
-
     const lowerCaseEmail = email.toLowerCase().trim();
-
-    // Validation du mot de passe
     if (!this.passwordService.isPasswordValid(password)) {
       throw new BadRequestError(
         'Password does not meet complexity requirements (min. 8 chars, 1 uppercase, 1 lowercase, 1 digit, 1 special character).',
       );
     }
-
-    // Vérification des droits pour créer un utilisateur interne
     const isInternalRequestor = !!options?.requestingUser?.internal;
     if (restData.internal && !isInternalRequestor) {
       throw new ForbiddenError('Cannot create internal user without being internal.');
     }
-
     const existingActiveUser = await this.userRepository.findByEmail(lowerCaseEmail);
     if (existingActiveUser) {
       throw new BadRequestError('Email address is already in use by an active user.');
     }
-
     try {
       const hashedPassword = await this.passwordService.hashPassword(password);
       const encodedOverrides = AuthorizationUtils.encodePermissionsToString(permissions ?? {});
       const deletedUser = await this.userRepository.findDeletedByEmail(lowerCaseEmail);
       let userEntity: User;
-
       if (deletedUser) {
         logger.info(
           `Reactivating deleted user with email ${lowerCaseEmail} (ID: ${deletedUser.id})`,
         );
-
         Object.assign(deletedUser, restData);
         deletedUser.deletedAt = null;
         deletedUser.email = lowerCaseEmail;
@@ -178,7 +177,6 @@ export class UsersService {
         deletedUser.permissionsExpireAt = permissionsExpireAt
           ? dayjs(permissionsExpireAt).toDate()
           : null;
-
         userEntity = deletedUser;
       } else {
         userEntity = this.userRepository.create({
@@ -192,14 +190,11 @@ export class UsersService {
           permissionsExpireAt: permissionsExpireAt ? dayjs(permissionsExpireAt).toDate() : null,
         });
       }
-
       if (!userEntity.isValid()) {
         throw new BadRequestError(`User data is invalid ${validationInputErrors}`);
       }
-
       const savedUser = await this.userRepository.save(userEntity);
       logger.info(`User ${savedUser.id} ${deletedUser ? 'reactivated' : 'created'} successfully.`);
-
       return this.mapToApiResponse(savedUser)!;
     } catch (error: any) {
       logger.error({
@@ -207,7 +202,6 @@ export class UsersService {
         originalError: error,
         originalStack: error?.stack,
       });
-      // Si c'est déjà une erreur http explicite, la relancer telle quelle
       if (
         error instanceof BadRequestError ||
         error instanceof ForbiddenError ||
@@ -220,7 +214,11 @@ export class UsersService {
   }
 
   /**
-   * Met à jour les informations d'un utilisateur existant
+   * Updates an existing user's information.
+   * @param id The user ID.
+   * @param input The update input.
+   * @param options Optional request context.
+   * @returns The updated user API response.
    */
   async update(
     id: number,
@@ -229,8 +227,6 @@ export class UsersService {
   ): Promise<UserApiResponse> {
     const { password, permissions, permissionsExpireAt, ...restData } = input;
     const requestingUser = options?.requestingUser;
-
-    // Vérification des droits : seulement soi-même ou un admin peut modifier
     if (requestingUser) {
       const isSelf = requestingUser.id === id;
       const isAdmin = requestingUser.level >= SecurityLevel.ADMIN;
@@ -238,21 +234,17 @@ export class UsersService {
         throw new ForbiddenError('You do not have permission to update this user.');
       }
     }
-
     try {
       const user = await this.userRepository.findByIdWithPassword(id);
       if (!user) throw new NotFoundError(`User with id ${id} not found.`);
-
       const updatePayload: Partial<User> = { ...restData };
       let passwordChanged = false;
-
       if (password) {
         if (!this.passwordService.isPasswordValid(password)) {
           throw new BadRequestError(
             'Password does not meet complexity requirements (min. 8 chars, 1 uppercase, 1 lowercase, 1 digit, 1 special character).',
           );
         }
-
         const isSame = await user.comparePassword(password);
         if (!isSame) {
           updatePayload.password = await this.passwordService.hashPassword(password);
@@ -263,44 +255,35 @@ export class UsersService {
           logger.warn(`User ${id} attempted to update with the same password.`);
         }
       }
-
       if (permissions !== undefined) {
         updatePayload.authorisationOverrides = AuthorizationUtils.encodePermissionsToString(
           permissions ?? {},
         );
       }
-
       if (permissionsExpireAt !== undefined) {
         const expiryDate = permissionsExpireAt ? dayjs(permissionsExpireAt) : null;
         updatePayload.permissionsExpireAt = expiryDate?.isValid() ? expiryDate.toDate() : null;
       }
-
       Object.assign(user, updatePayload);
-
       if (!user.isValid()) {
         throw new BadRequestError(`User data after update is invalid. ${validationInputErrors}`);
       }
-
       const result = await this.userRepository.update(id, updatePayload);
       if (result.affected === 0) {
         throw new NotFoundError(
           `User with id ${id} not found during update (or no changes applied).`,
         );
       }
-
       const updatedUser = await this.userRepository.findById(id);
       if (!updatedUser) throw new ServerError('Failed to re-fetch user after update.');
-
       if (passwordChanged && updatedUser.passwordStatus === PasswordStatus.VALIDATING) {
         const emailLanguage = updatedUser.preferences?.language === 'fr' ? 'fr' : 'en';
         await this.passwordService.sendPasswordConfirmationEmail(updatedUser, emailLanguage);
       }
-
       logger.info(`User ${id} updated successfully.`);
       return this.mapToApiResponse(updatedUser)!;
     } catch (error: any) {
       logger.error(error, `Error updating user ${id}`);
-      // Propager les erreurs explicites
       if (
         error instanceof BadRequestError ||
         error instanceof ForbiddenError ||
@@ -313,7 +296,10 @@ export class UsersService {
   }
 
   /**
-   * Met à jour les préférences d'un utilisateur
+   * Updates a user's preferences.
+   * @param userId The user ID.
+   * @param preferences The new preferences object or null.
+   * @returns The updated user API response.
    */
   async updatePreferences(
     userId: number,
@@ -322,12 +308,10 @@ export class UsersService {
     try {
       const result = await this.userRepository.update(userId, { preferences });
       if (result.affected === 0) throw new NotFoundError(`User with id ${userId} not found.`);
-
       const updatedUser = await this.userRepository.findById(userId);
       if (!updatedUser) {
         throw new ServerError('Failed to re-fetch user after preference update.');
       }
-
       return this.mapToApiResponse(updatedUser)!;
     } catch (error) {
       throw new ServerError(`Error updating preferences for user ${userId} ${error}`);
@@ -335,19 +319,22 @@ export class UsersService {
   }
 
   /**
-   * Réinitialise les préférences d'un utilisateur
+   * Resets a user's preferences to null.
+   * @param userId The user ID.
+   * @returns The updated user API response.
    */
   async resetPreferences(userId: number): Promise<UserApiResponse> {
     return this.updatePreferences(userId, null);
   }
 
   /**
-   * Suppression logique (soft delete) d'un utilisateur
+   * Soft deletes a user (logical deletion).
+   * @param id The user ID.
+   * @param options Optional request context.
+   * @returns void
    */
   async delete(id: number, options?: { requestingUser?: Request['user'] }): Promise<void> {
     const requestingUser = options?.requestingUser;
-
-    // Vérification des droits : seulement soi-même ou un admin peut supprimer
     if (requestingUser) {
       const isSelf = requestingUser.id === id;
       const isAdmin = requestingUser.level >= SecurityLevel.ADMIN;
@@ -358,17 +345,13 @@ export class UsersService {
         throw new ForbiddenError('Deleting your own account via the API is not permitted.');
       }
     }
-
     try {
       const user = await this.userRepository.findById(id);
       if (!user) throw new NotFoundError(`User with id ${id} not found.`);
-
       const anonymizedEmail = `${user.email}_deleted_${Date.now()}`;
       await this.userRepository.softDelete(id, anonymizedEmail);
-
       logger.info(`User ${id} successfully soft-deleted.`);
     } catch (error) {
-      // Propager les erreurs explicites
       if (
         error instanceof BadRequestError ||
         error instanceof ForbiddenError ||
@@ -380,6 +363,10 @@ export class UsersService {
     }
   }
 
+  /**
+   * Returns a singleton instance of UsersService.
+   * @returns The UsersService instance.
+   */
   static getInstance(): UsersService {
     if (!instance) {
       instance = new UsersService(new UserRepository());

@@ -1,5 +1,10 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Ajoute ces deux lignes pour obtenir le répertoire courant du fichier
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 type EmailTemplate = { subject: string; html: string };
 type EmailTemplates = Record<string, EmailTemplate>;

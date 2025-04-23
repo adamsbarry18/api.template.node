@@ -59,7 +59,8 @@ export function passportAuthenticationMiddleware(): void {
           }
           const user = await userService.findById(userId);
           if (user) {
-            const authenticatedUser = { ...user, authToken: rawToken };
+            // Correction : injecte id et sub dans req.user pour compatibilité
+            const authenticatedUser = { ...user, authToken: rawToken, id: userId, sub: userId };
             return done(null, authenticatedUser);
           } else {
             logger.warn(`User not found (ID: ${userId}) for active token. Invalidating token.`);

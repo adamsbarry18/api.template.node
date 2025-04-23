@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
 import dayjs from 'dayjs';
+import { nanoid } from 'nanoid';
 import { UserRepository } from '../../users/data/users.repository';
 import logger from '@/lib/logger';
 import config from '@/config';
@@ -9,6 +10,8 @@ import {
   BadRequestError,
   ServerError,
   UnauthorizedError,
+  ParameterError,
+  PARAMETER_ERRORS,
 } from '@/common/errors/httpErrors';
 import { getRedisClient, redisClient } from '@/lib/redis';
 import { sendMail } from '@/lib/mailer';
@@ -29,14 +32,14 @@ export class PasswordService {
   }
 
   /**
-   * Checks that a password:
-   * - Is at least 8 characters long
-   * - Contains at least one lowercase letter
-   * - Contains at least one uppercase letter
-   * - Contains at least one digit
-   * - Contains at least one special character (@$!%*?&)
-   * @param password - password input
-   * @returns {boolean} - true if password valid
+   * Checks if a password meets complexity requirements:
+   * - At least 8 characters
+   * - At least one lowercase letter
+   * - At least one uppercase letter
+   * - At least one digit
+   * - At least one special character (@$!%*?&)
+   * @param password The password to validate
+   * @returns True if the password is valid, false otherwise
    */
   isPasswordValid(password: string): boolean {
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/;
@@ -44,14 +47,12 @@ export class PasswordService {
   }
 
   /**
-   * Génère une chaîne aléatoire pour les codes de confirmation/réinitialisation
-   */
-  private generateRedisCode(): string {
-    return randomUUID().replace(/-/g, '');
-  }
-
-  /**
-   * Centralise le rendu des templates d'emails liés aux mots de passe
+   * Renders the email template for password-related actions.
+   * @param type The type of password email (changed, reset, confirmation)
+   * @param user The user object
+   * @param context Additional context such as URL
+   * @param language The language for the email template
+   * @returns An object containing subject and HTML content
    */
   private renderPasswordEmailTemplate(
     type: 'passwordChanged' | 'passwordReset' | 'passwordConfirmation',
@@ -67,14 +68,18 @@ export class PasswordService {
   }
 
   /**
-   * Hache un mot de passe avec bcrypt
+   * Hashes a plain password using bcrypt.
+   * @param plainPassword The plain text password to hash
+   * @returns The hashed password as a string
    */
   async hashPassword(plainPassword: string): Promise<string> {
     return bcrypt.hash(plainPassword, BCRYPT_SALT_ROUNDS);
   }
 
   /**
-   * Vérifie si un mot de passe est expiré
+   * Checks if a password is expired based on the last update date.
+   * @param passwordUpdatedAt The date when the password was last updated
+   * @returns True if the password is expired, false otherwise
    */
   isPasswordExpired(passwordUpdatedAt: Date | null): boolean {
     if (!passwordUpdatedAt) return false;
@@ -82,9 +87,12 @@ export class PasswordService {
   }
 
   /**
-   * Envoie un email de confirmation de changement de mot de passe
+   * Sends a password confirmation email to the user.
+   * @param user The user to send the email to
+   * @param referer Optional referer URL for generating the confirmation link
+   * @returns A promise that resolves when the email is sent
    */
-  async sendPasswordConfirmationEmail(user: User, language: 'fr' | 'en' = 'en'): Promise<void> {
+  async sendPasswordConfirmationEmail(user: User, referer?: string): Promise<void> {
     const redis = redisClient ?? getRedisClient();
     if (!redis) {
       logger.error('Redis unavailable for password confirmation email.');
@@ -92,19 +100,19 @@ export class PasswordService {
     }
 
     try {
-      const code = this.generateRedisCode();
-      const redisKey = `confirm-password:${code}`;
-
-      await redis.setEx(redisKey, CONFIRM_CODE_EXPIRE_SECONDS, user.id.toString());
-      const confirmationUrl = `${config.FRONTEND_URL || 'http://localhost:8080'}/confirm-password?code=${code}`;
-
+      const code = nanoid(32);
+      let url = referer;
+      if (url && url.endsWith('/')) url = url.substring(0, url.length - 1);
+      if (!url) url = config.FRONTEND_URL || 'http://localhost:8080';
+      await redis.setEx(`api:users:confirm-password:${code}`, CONFIRM_CODE_EXPIRE_SECONDS, user.id.toString());
+      const confirmationUrl = `${url}/confirm-password?code=${code}`;
+      const language = user.preferences?.language || 'en';
       const { subject, html } = this.renderPasswordEmailTemplate(
         'passwordConfirmation',
         user,
         { url: confirmationUrl },
         language,
       );
-
       logger.info(`Sending password confirmation email to ${user.email} in language: ${language}`);
       await sendMail({ to: user.email, subject, html });
     } catch (error) {
@@ -113,9 +121,13 @@ export class PasswordService {
   }
 
   /**
-   * Envoie un email de réinitialisation de mot de passe
+   * Sends a password reset email to the user.
+   * @param email The user's email address
+   * @param referer Optional referer URL for generating the reset link
+   * @param language Optional language for the email
+   * @returns A promise that resolves when the email is sent
    */
-  async sendPasswordResetEmail(email: string, language: 'fr' | 'en' = 'en'): Promise<void> {
+  async sendPasswordResetEmail(email: string, referer?: string, language?: 'fr' | 'en'): Promise<void> {
     const user = await this.userRepository.findByEmail(email);
     if (!user) {
       logger.warn(`Password reset requested for unknown email: ${email}. No email sent.`);
@@ -129,23 +141,20 @@ export class PasswordService {
     }
 
     try {
-      const code = this.generateRedisCode();
-      const redisKey = `reset-password:${code}`;
-
-      // Store user ID in Redis with expiration
-      await redis.setEx(redisKey, CONFIRM_CODE_EXPIRE_SECONDS, user.id.toString());
-
-      // Build reset URL
-      const resetUrl = `${config.FRONTEND_URL || 'http://localhost:8080'}/reset-password?code=${code}`;
-
+      const code = nanoid(32);
+      let url = referer;
+      if (url && url.endsWith('/')) url = url.substring(0, url.length - 1);
+      if (!url) url = config.FRONTEND_URL || 'http://localhost:8080';
+      await redis.setEx(`api:users:reset-password:${code}`, CONFIRM_CODE_EXPIRE_SECONDS, user.id.toString());
+      const resetUrl = `${url}/reset-password?code=${code}`;
+      const lang = language || user.preferences?.language || 'en';
       const { subject, html } = this.renderPasswordEmailTemplate(
         'passwordReset',
         user,
         { url: resetUrl },
-        language,
+        lang,
       );
-
-      logger.info(`Sending password reset email to ${user.email} in language: ${language}`);
+      logger.info(`Sending password reset email to ${user.email} in language: ${lang}`);
       await sendMail({ to: user.email, subject, html });
     } catch (error) {
       logger.error(error, `Failed to send password reset email to ${user.email}`);
@@ -153,7 +162,9 @@ export class PasswordService {
   }
 
   /**
-   * Confirme un changement de mot de passe via un code
+   * Confirms a password change using a confirmation code.
+   * @param code The confirmation code from the email
+   * @returns True if the password status was confirmed
    */
   async confirmPasswordChange(code: string): Promise<boolean> {
     const redis = redisClient ?? getRedisClient();
@@ -161,7 +172,7 @@ export class PasswordService {
       throw new ServerError('Service temporarily unavailable (Redis)');
     }
 
-    const redisKey = `confirm-password:${code}`;
+    const redisKey = `api:users:confirm-password:${code}`;
     const userIdStr = await redis.get(redisKey);
 
     if (!userIdStr) {
@@ -174,27 +185,30 @@ export class PasswordService {
       throw new BadRequestError('Invalid confirmation data.');
     }
 
-    try {
-      const result = await this.userRepository.updatePasswordStatus(userId, PasswordStatus.ACTIVE);
-
-      if (result.affected === 0) {
-        const userExists = await this.userRepository.exists({ id: userId });
-        if (!userExists) {
-          throw new NotFoundError('User not found during password confirmation.');
-        }
-      }
-
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
       await redis.del(redisKey);
-      logger.info(`Password confirmed for user ${userId}`);
-      return true;
-    } catch (error) {
-      await redis.del(redisKey);
-      throw new ServerError(`Failed to confirm password. ${error}`);
+      throw new NotFoundError('User not found during password confirmation.');
     }
+
+    logger.info(`[confirmPasswordChange] Attempting to delete Redis key: ${redisKey}`);
+    try {
+      const delResult = await redis.del(redisKey);
+      logger.info(`[confirmPasswordChange] Redis key deletion attempted for: ${redisKey}. Result: ${delResult}`);
+    } catch (delError) {
+       logger.error(delError, `[confirmPasswordChange] Failed to delete Redis key: ${redisKey}`);
+    }
+    await this.userRepository.updatePasswordStatus(userId, PasswordStatus.ACTIVE);
+
+    logger.info(`Password status confirmed (activated) for user ${userId}`);
+    return true;
   }
 
   /**
-   * Réinitialise un mot de passe via un code
+   * Resets a user's password using a reset code.
+   * @param code The reset code from the email
+   * @param newPassword The new password to set
+   * @returns True if the password was reset successfully
    */
   async resetPasswordWithCode(code: string, newPassword: string): Promise<boolean> {
     const redis = redisClient ?? getRedisClient();
@@ -202,7 +216,7 @@ export class PasswordService {
       throw new ServerError('Service temporarily unavailable (Redis)');
     }
 
-    const redisKey = `reset-password:${code}`;
+    const redisKey = `api:users:reset-password:${code}`;
     const userIdStr = await redis.get(redisKey);
 
     if (!userIdStr) {
@@ -245,7 +259,13 @@ export class PasswordService {
         throw new NotFoundError('User not found during password reset update.');
       }
 
-      await redis.del(redisKey);
+      logger.info(`[resetPasswordWithCode] Attempting to delete Redis key: ${redisKey}`);
+      try {
+        const delResult = await redis.del(redisKey);
+        logger.info(`[resetPasswordWithCode] Redis key deletion attempted for: ${redisKey}. Result: ${delResult}`);
+      } catch (delError) {
+        logger.error(delError, `[resetPasswordWithCode] Failed to delete Redis key: ${redisKey}`);
+      }
       logger.info(`Password reset successful for user ${userId}`);
       return true;
     } catch (error) {
@@ -259,11 +279,14 @@ export class PasswordService {
   }
 
   /**
-   * Mise à jour du statut de mot de passe d'un utilisateur
+   * Updates the password status for a user.
+   * @param userId The user's ID
+   * @param status The new password status
+   * @returns A promise that resolves when the status is updated
    */
   async updatePasswordStatus(userId: number, status: PasswordStatus): Promise<void> {
     try {
-      const result = await this.userRepository.update(userId, { passwordStatus: status });
+      const result = await this.userRepository.updatePasswordStatus(userId,status);
 
       if (result.affected === 0) {
         logger.warn(
@@ -279,48 +302,46 @@ export class PasswordService {
   }
 
   /**
-   * Change le mot de passe d'un utilisateur avec statut expiré
+   * Changes the password for a user whose password is expired.
+   * @param params Object containing userId or email, new password, and optional referer
+   * @returns True if the password was updated and confirmation email sent
    */
-  async updateExpiredPassword(email: string, newPassword: string): Promise<boolean> {
-    const user = await this.userRepository.findByEmailWithPassword(email);
-    if (!user) throw new NotFoundError('User not found');
+  async updateExpiredPassword(params: { userId?: number; email?: string; password: string; referer?: string }): Promise<boolean> {
+    const { userId, email, password, referer } = params;
+    if (!userId && !email) throw new NotFoundError('userId or email have to be provided');
+    let user: User | null = null;
+    if (userId) {
+      user = await this.userRepository.findByIdWithPassword(userId);
+    } else if (email) {
+      user = await this.userRepository.findByEmailWithPassword(email);
+    }
+    if (!user) throw new NotFoundError('Could not find user');
 
-    if (!this.isPasswordValid(newPassword)) {
-      throw new BadRequestError('Password does not meet complexity requirements');
+    if (!this.isPasswordValid(password)) {
+      throw new BadRequestError('Password security is too low');
     }
 
-    const isSame = await user.comparePassword(newPassword);
+
+    const hashedInputPassword = await this.hashPassword(password);
+    if (hashedInputPassword === user.password) {
+      throw new ParameterError(PARAMETER_ERRORS.PASSWORD_IDENTICAL);
+    }
+
+    const isSame = await user.comparePassword(password);
     if (isSame) throw new BadRequestError('New password must be different from the old one');
 
-    user.password = await this.hashPassword(newPassword);
-    user.passwordStatus = PasswordStatus.ACTIVE;
-    user.passwordUpdatedAt = new Date();
-    await this.userRepository.save(user);
+    const hashedPassword = await this.hashPassword(password);
+    await this.userRepository.updatePasswordAndStatus(user.id, hashedPassword, PasswordStatus.VALIDATING);
 
-    // Déterminer la langue à partir des préférences ou par défaut 'en'
-    const language = user.preferences?.language || 'en';
-
-    // Utiliser le template centralisé pour l'email de notification
-    const { subject, html } = this.renderPasswordEmailTemplate(
-      'passwordChanged',
-      user,
-      {},
-      language,
-    );
-
-    try {
-      await sendMail({
-        to: user.email,
-        subject,
-        html,
-      });
-    } catch (e) {
-      logger.error(e, `Error sending password change notification email to ${user.email}`);
-    }
+    await this.sendPasswordConfirmationEmail(user, referer);
 
     return true;
   }
 
+  /**
+   * Returns a singleton instance of PasswordService.
+   * @returns The PasswordService instance
+   */
   static getInstance(): PasswordService {
     if (!instance) {
       instance = new PasswordService(new UserRepository());

@@ -10,7 +10,7 @@ import { NotFoundError } from '@/common/errors/httpErrors';
 import logger from '@/lib/logger';
 import { redisClient } from '@/lib/redis';
 
-const REDIS_AUTHORISATION_KEY_PATTERN = 'api-auth:user_authorisation:{userId}';
+const REDIS_AUTHORISATION_KEY_PATTERN = 'api:users:user_authorisation:{userId}';
 const AUTHORISATION_CACHE_TTL_SECONDS = 60 * 30; // 30 minutes
 
 let instance: AuthorizationService | null = null;
@@ -25,14 +25,17 @@ export class AuthorizationService {
   }
 
   /**
-   * Génère la clé Redis pour stocker les autorisations d'un utilisateur
+   * Generates the Redis key for storing a user's authorizations.
+   * @param userId The user ID.
+   * @returns The Redis key string.
    */
   private getRedisAuthorisationKey(userId: number): string {
     return REDIS_AUTHORISATION_KEY_PATTERN.replace('{userId}', userId.toString());
   }
 
   /**
-   * Récupère toutes les fonctionnalités et leurs actions possibles
+   * Retrieves all features and their possible actions.
+   * @returns An object mapping feature names to their actions.
    */
   async getAllFeatures(): Promise<Record<string, string[]>> {
     const result: Record<string, string[]> = {};
@@ -46,7 +49,8 @@ export class AuthorizationService {
   }
 
   /**
-   * Liste les autorisations par niveau de sécurité
+   * Lists authorizations by security level.
+   * @returns An object mapping levels to their authorizations.
    */
   async listAuthorisationsByLevel(): Promise<Record<number, Record<string, string[]>>> {
     const levels = Object.values(SecurityLevel).filter((v) => typeof v === 'number') as number[];
@@ -58,7 +62,9 @@ export class AuthorizationService {
   }
 
   /**
-   * Liste les autorisations pour un niveau de sécurité donné
+   * Lists authorizations for a given security level.
+   * @param level The security level.
+   * @returns An object mapping feature names to their actions.
    */
   async listAuthorisationsFromLevel(level: number): Promise<Record<string, string[]>> {
     const res: Record<string, string[]> = {};
@@ -74,7 +80,9 @@ export class AuthorizationService {
   }
 
   /**
-   * Récupère les autorisations effectives pour un utilisateur
+   * Retrieves the effective authorizations for a user.
+   * @param userId The user ID.
+   * @returns The user's authorizations, expiration, and level.
    */
   async getAuthorisation(userId: number): Promise<{
     authorisation: Record<string, string[]>;
@@ -94,7 +102,10 @@ export class AuthorizationService {
   }
 
   /**
-   * Crée une autorisation temporaire pour un utilisateur
+   * Creates a temporary authorization for a user.
+   * @param userId The user ID.
+   * @param param1 Expiration date and/or security level.
+   * @returns Success status.
    */
   async createTemporaryAuthorization(
     userId: number,
@@ -107,14 +118,16 @@ export class AuthorizationService {
     if (level !== undefined) user.level = level;
     await this.userRepository.save(user);
 
-    // Invalider le cache des autorisations
     await this.invalidateAuthCache(userId);
 
     return { success: true };
   }
 
   /**
-   * Met à jour les autorisations d'un utilisateur
+   * Updates a user's authorizations.
+   * @param userId The user ID.
+   * @param data Level and/or authorization overrides.
+   * @returns Success status.
    */
   async updateAuthorization(
     userId: number,
@@ -129,14 +142,15 @@ export class AuthorizationService {
 
     await this.userRepository.save(user);
 
-    // Invalider le cache des autorisations
     await this.invalidateAuthCache(userId);
 
     return { success: true };
   }
 
   /**
-   * Supprime les autorisations spécifiques d'un utilisateur (réinitialise les overrides et l'expiration)
+   * Deletes a user's specific authorizations (resets overrides and expiration).
+   * @param userId The user ID.
+   * @returns Success status.
    */
   async deleteAuthorisationsUser(userId: number): Promise<{ success: boolean }> {
     const user = await this.userRepository.findById(userId);
@@ -146,14 +160,17 @@ export class AuthorizationService {
     user.permissionsExpireAt = null;
     await this.userRepository.save(user);
 
-    // Invalider le cache des autorisations
     await this.invalidateAuthCache(userId);
 
     return { success: true };
   }
 
   /**
-   * Vérifie si un utilisateur a une permission spécifique
+   * Checks if a user has a specific permission.
+   * @param userId The user ID.
+   * @param featureName The feature name.
+   * @param actionName The action name.
+   * @returns True if the user has the permission, false otherwise.
    */
   async checkAuthorisation(
     userId: number,
@@ -172,7 +189,10 @@ export class AuthorizationService {
   }
 
   /**
-   * Vérifie si le niveau de sécurité d'un utilisateur est suffisant
+   * Checks if a user's security level is sufficient.
+   * @param userId The user ID.
+   * @param requiredLevel The required security level.
+   * @returns True if the user has sufficient level, false otherwise.
    */
   async checkLevelAccess(userId: number, requiredLevel: SecurityLevel): Promise<boolean> {
     const user = await this.userRepository.findById(userId);
@@ -187,9 +207,6 @@ export class AuthorizationService {
     return hasAccess;
   }
 
-  /**
-   * Récupère les permissions effectives pour un utilisateur avec cache Redis
-   */
   private async getEffectivePermissions(userId: number): Promise<DecodedAuthorisations | null> {
     if (!redisClient) {
       logger.warn('Redis unavailable for retrieving authorizations. Calculating directly.');
@@ -235,9 +252,6 @@ export class AuthorizationService {
     return permissions;
   }
 
-  /**
-   * Invalide le cache des autorisations pour un utilisateur
-   */
   private async invalidateAuthCache(userId: number): Promise<void> {
     if (!redisClient) return;
 
@@ -250,9 +264,6 @@ export class AuthorizationService {
     }
   }
 
-  /**
-   * Calcule les permissions effectives sans utiliser le cache
-   */
   private async calculateEffectivePermissions(
     userId: number,
   ): Promise<DecodedAuthorisations | null> {
@@ -339,9 +350,6 @@ export class AuthorizationService {
     };
   }
 
-  /**
-   * Décode la chaîne d'override d'autorisations en Map de masques par featureId
-   */
   private decodeAuthorisationOverrides(
     overrideString: string | null | undefined,
   ): DecodedOverrides {
@@ -383,9 +391,6 @@ export class AuthorizationService {
     return decoded;
   }
 
-  /**
-   * Calcule le masque de permission par défaut pour une fonctionnalité et un niveau utilisateur
-   */
   private calculateDefaultMaskForLevel(featureId: number, userLevel: SecurityLevel): number {
     const featureInfo = featuresProcessedFlagsMap.get(featureId);
     if (!featureInfo) {
@@ -406,10 +411,14 @@ export class AuthorizationService {
     return defaultMask;
   }
 
-  static getInstance(): AuthorizationService {
-    if (!instance) {
-      instance = new AuthorizationService(new UserRepository());
+    /**
+   * Returns a singleton instance of AuthorizationService.
+   * @returns The AuthorizationService instance.
+   */
+    static getInstance(): AuthorizationService {
+      if (!instance) {
+        instance = new AuthorizationService(new UserRepository());
+      }
+      return instance;
     }
-    return instance;
-  }
 }

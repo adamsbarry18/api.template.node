@@ -4,76 +4,84 @@ import { AppDataSource } from '@/database/data-source';
 import logger from '@/lib/logger';
 import request from 'supertest';
 import app from '@/app';
+import { redisClient, initializeRedis } from '@/lib/redis';
+import { Errors } from '@/common/errors/httpErrors';
 
-// Export admin credentials and token for use in tests
 export const adminCredentials = {
   email: 'mabarry2018@gmail.com',
   password: '123456PAM$45789asdss',
 };
 export let adminToken: string;
 
-// Increase timeout for beforeAll hook
+const waitFor = async (fn: () => Promise<any>, label: string, maxTries = 10, delay = 300) => {
+  let tries = 0;
+  while (tries < maxTries) {
+    try {
+      await fn();
+      logger.info(`✅ ${label} is ready.`);
+      return;
+    } catch (err) {
+      tries++;
+      logger.warn(`${label} not ready, retrying in ${delay}ms... (${tries}/${maxTries}) ${err}`);
+      await new Promise(res => setTimeout(res, delay));
+    }
+  }
+  throw new Errors.ServiceUnavailableError(`${label} not ready after ${maxTries} tries`);
+};
+
 beforeAll(async () => {
   logger.info('Executing global test setup...');
   try {
-    // 1. Initialize Database Connection
+    // 1. Database
     if (!AppDataSource.isInitialized) {
       logger.info('Initializing TypeORM DataSource for tests...');
       await AppDataSource.initialize();
       logger.info('Database initialized.');
     }
 
-    // Pas de dropDatabase, pas de synchronize, pas de chargement SQL ici
+    // 2. Redis
+    logger.info('Initializing Redis client for tests...');
+    await initializeRedis();
+    await waitFor(
+      async () => {
+        if (!redisClient?.isReady) throw new Errors.ServiceUnavailableError('Redis not ready');
+      },
+      'Redis client'
+    );
 
-    // 2. Wait for API router
+    // 3. API router
     logger.info('Waiting for dynamic route registration...');
     await initializedApiRouter;
     logger.info('✅ Dynamic routes registration complete.');
 
-    // Admin login for tests
-    try {
-      const loginRes = await request(app)
-        .post('/api/v1/auth/login')
-        .send(adminCredentials);
-
-      const token = loginRes.body?.data?.token;
-      if (loginRes.status !== 200 || !token) {
-        logger.error(
-          { status: loginRes.status, body: loginRes.body },
-          'Admin login failed: response details'
-        );
-        throw new Error('Admin login failed in global setup');
-      }
-      adminToken = token;
-      logger.info('✅ Admin token acquired for tests.');
-    } catch (err) {
-      logger.error(err, '❌ Failed to login as admin in global setup.');
-      throw err;
+    // 4. Admin login
+    const loginRes = await request(app)
+      .post('/api/v1/auth/login')
+      .send(adminCredentials);
+    const token = loginRes.body?.data?.token;
+    if (loginRes.status !== 200 || !token) {
+      logger.error({ status: loginRes.status, body: loginRes.body }, 'Admin login failed');
+      throw new Errors.AuthenticateError('Admin login failed in global setup');
     }
+    adminToken = token;
+    logger.info('✅ Admin token acquired for tests.');
 
     logger.info('✅ Global test setup finished successfully.');
-
   } catch (error) {
     logger.error(error, '❌ Error during global test setup.');
-    throw error; // Let Vitest see the actual error
+    throw error;
   }
-}, 60000); // 60 second timeout for the entire hook
+}, 60000);
 
-/**
- * Global Teardown
- * Runs once after all test suites have finished.
- */
 afterAll(async () => {
   logger.info('Executing global test teardown...');
   try {
-     // Close database connection
-     if (AppDataSource.isInitialized) {
-       await AppDataSource.destroy();
-       logger.info('✅ TypeORM DataSource destroyed.');
-     }
-     // Add other cleanup tasks here (e.g., close Redis connection if used)
-     logger.info('✅ Global test teardown complete.');
+    if (AppDataSource.isInitialized) {
+      await AppDataSource.destroy();
+      logger.info('✅ TypeORM DataSource destroyed.');
+    }
+    logger.info('✅ Global test teardown complete.');
   } catch (error) {
-     logger.error(error, '❌ Error during global test teardown.');
+    logger.error(error, '❌ Error during global test teardown.');
   }
 });

@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from '../../config/http';
 import {
-  Errors,
   BaseError,
   ServerError,
   ValidationError,

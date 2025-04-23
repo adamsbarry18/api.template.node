@@ -75,11 +75,15 @@ export function registerRoutes(
       methodMiddlewares.push(requireAuth); // Always require authentication if authorization is specified
 
       if (authRule.level !== undefined) {
-        // Appel direct du middleware, pas de try/catch
         methodMiddlewares.push(requireLevel(authRule.level));
       } else if (authRule.feature && authRule.action) {
         methodMiddlewares.push(requirePermission(authRule.feature, authRule.action));
       }
+    }
+
+    // Ajout : si la route est "internal", on force requireAuth même sans @authorize
+    if (routeMeta.isInternal && !authRule) {
+      methodMiddlewares.push(requireAuth);
     }
 
     // Step 2: Zod Validation (if defined by @validate)

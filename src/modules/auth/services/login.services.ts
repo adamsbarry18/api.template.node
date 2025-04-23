@@ -8,7 +8,7 @@ import { PasswordStatus, UserApiResponse } from '@/modules/users/models/users.en
 import { UsersService } from '@/modules/users/services/users.services';
 import { PasswordService } from './password.services';
 
-const REDIS_TOKEN_INVALIDATION_KEY = 'api-auth:token_invalidation:{token}';
+const REDIS_TOKEN_INVALIDATION_KEY = 'api:users:token_invalidation:{token}';
 const TOKEN_DEFAULT_EXPIRE_SECONDS = 60 * 60 * 24 * 30; // 30 jours
 
 let instance: LoginService | null = null;
@@ -27,14 +27,19 @@ export class LoginService {
   }
 
   /**
-   * Génère la clé Redis pour l'invalidation d'un token
+   * Generates the Redis key for token invalidation.
+   * @param token The JWT token.
+   * @returns The Redis key string.
    */
   private getRedisInvalidationKey(token: string): string {
     return REDIS_TOKEN_INVALIDATION_KEY.replace('{token}', token);
   }
 
   /**
-   * Authentifie un utilisateur en vérifiant email et mot de passe
+   * Authenticates a user by verifying email and password.
+   * @param email The user's email.
+   * @param password The user's password.
+   * @returns The JWT token and user API response.
    */
   async login(email: string, password: string): Promise<{ token: string; user: UserApiResponse }> {
     if (!email || !password) {
@@ -63,7 +68,9 @@ export class LoginService {
       if (user.passwordStatus !== PasswordStatus.EXPIRED) {
         await this.passwordService.updatePasswordStatus(user.id, PasswordStatus.EXPIRED);
       }
-      throw new UnauthorizedError('Password expired.');
+      const error = new UnauthorizedError('Password expired.');
+      error.code = 'ERR_PWD_EXPIRED';
+      throw error;
     }
 
     const token = await this.signToken(user.id, { level: user.level, internal: user.internal });
@@ -72,7 +79,8 @@ export class LoginService {
   }
 
   /**
-   * Déconnecte un utilisateur en invalidant son token
+   * Logs out a user by invalidating their token.
+   * @param token The JWT token to invalidate.
    */
   async logout(token: string): Promise<void> {
     if (!token) return;
@@ -80,7 +88,10 @@ export class LoginService {
   }
 
   /**
-   * Signe un token JWT pour un utilisateur
+   * Signs a JWT token for a user.
+   * @param userId The user ID.
+   * @param extraPayload Additional payload to include in the token.
+   * @returns The signed JWT token.
    */
   async signToken(userId: number, extraPayload: Record<string, any> = {}): Promise<string> {
     const payload = { sub: userId, ...extraPayload };
@@ -93,7 +104,8 @@ export class LoginService {
   }
 
   /**
-   * Invalide un token en le stockant dans Redis
+   * Invalidates a token by storing it in Redis.
+   * @param token The JWT token to invalidate.
    */
   async invalidateToken(token: string): Promise<void> {
     if (!redisClient) {
@@ -110,27 +122,31 @@ export class LoginService {
   }
 
   /**
-   * Vérifie si un token a été invalidé
+   * Checks if a token has been invalidated.
+   * @param token The JWT token to check.
+   * @returns True if invalidated, false if valid, or null if unable to check.
    */
-  async isTokenInvalidated(token: string): Promise<boolean> {
-    if (!redisClient) {
-      logger.error('Redis unavailable for token invalidation check.');
-      // Fail-safe: autoriser l'accès si Redis est indisponible (politique de sécurité à définir)
-      return false;
+  async isTokenInvalidated(token: string): Promise<boolean | null> {
+    if (!redisClient || !redisClient.isReady) {
+      logger.error('Redis client not available or not ready for token invalidation check.');
+      return null;
     }
     const redisKey = this.getRedisInvalidationKey(token);
     try {
       const res = await redisClient.get(redisKey);
-      return !!res;
+      const isInvalidated = !!res;
+      logger.debug(`Token invalidation check for key ${redisKey}: ${isInvalidated ? 'Invalidated' : 'Valid'}`);
+      return isInvalidated;
     } catch (error) {
-      logger.error(error, `Error checking token invalidation: ${token.substring(0, 10)}...`);
-      // Fail-safe: considérer le token comme valide si la vérification Redis échoue
-      return false;
+      logger.error(error, `Redis error checking token invalidation for key ${redisKey}`);
+      return null;
     }
   }
 
   /**
-   * Génère un nouveau token pour un utilisateur donné
+   * Generates a new token for a given user.
+   * @param userId The user ID.
+   * @returns An object containing the new token.
    */
   async generateTokenForUser(userId: number): Promise<{ token: string }> {
     const user = await this.usersService.findById(userId);
@@ -139,10 +155,18 @@ export class LoginService {
   }
 
   /**
-   * Met à jour le mot de passe expiré d'un utilisateur et renvoie un nouveau token
+   * Updates an expired password for a user and returns a new token.
+   * @param email The user's email.
+   * @param newPassword The new password.
+   * @param referer Optional referer for context.
+   * @returns The new JWT token.
    */
-  async updateExpiredPassword(email: string, newPassword: string): Promise<string> {
-    const success = await this.passwordService.updateExpiredPassword(email, newPassword);
+  async updateExpiredPassword(email: string, newPassword: string, referer?: string): Promise<string> {
+    const success = await this.passwordService.updateExpiredPassword({
+      email,
+      password: newPassword,
+      referer,
+    });
     if (!success) {
       throw new ServerError('Failed to update expired password');
     }
@@ -155,6 +179,10 @@ export class LoginService {
     return await this.signToken(user.id, { level: user.level, internal: user.internal });
   }
 
+  /**
+   * Returns a singleton instance of LoginService.
+   * @returns The LoginService instance.
+   */
   static getInstance(): LoginService {
     if (!instance) {
       instance = new LoginService(new UserRepository());
