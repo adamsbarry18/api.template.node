@@ -1,9 +1,7 @@
 import bcrypt from 'bcryptjs';
 import dayjs from 'dayjs';
 import { nanoid } from 'nanoid';
-import { UserRepository } from '../../users/data/users.repository';
-import logger from '@/lib/logger';
-import config from '@/config';
+
 import {
   NotFoundError,
   BadRequestError,
@@ -12,10 +10,14 @@ import {
   ParameterError,
   PARAMETER_ERRORS,
 } from '@/common/errors/httpErrors';
-import { getRedisClient, redisClient } from '@/lib/redis';
+import config from '@/config';
+import logger from '@/lib/logger';
 import { sendMail } from '@/lib/mailer';
-import { User, PasswordStatus } from '../../users/models/users.entity';
+import { getRedisClient, redisClient } from '@/lib/redis';
 import { renderTemplate } from '@/locales/emails';
+
+import { UserRepository } from '../../users/data/users.repository';
+import { type User, PasswordStatus } from '../../users/models/users.entity';
 
 const CONFIRM_CODE_EXPIRE_SECONDS = 60 * 60 * 24 * 3; // 3 days
 const BCRYPT_SALT_ROUNDS = 10;
@@ -103,7 +105,11 @@ export class PasswordService {
       let url = referer;
       if (url && url.endsWith('/')) url = url.substring(0, url.length - 1);
       if (!url) url = config.FRONTEND_URL || 'http://localhost:8080';
-      await redis.setEx(`api:users:confirm-password:${code}`, CONFIRM_CODE_EXPIRE_SECONDS, user.id.toString());
+      await redis.setEx(
+        `api:users:confirm-password:${code}`,
+        CONFIRM_CODE_EXPIRE_SECONDS,
+        user.id.toString(),
+      );
       const confirmationUrl = `${url}/confirm-password?code=${code}`;
       const language = user.preferences?.language || 'en';
       const { subject, html } = this.renderPasswordEmailTemplate(
@@ -126,7 +132,11 @@ export class PasswordService {
    * @param language Optional language for the email
    * @returns A promise that resolves when the email is sent
    */
-  async sendPasswordResetEmail(email: string, referer?: string, language?: 'fr' | 'en'): Promise<void> {
+  async sendPasswordResetEmail(
+    email: string,
+    referer?: string,
+    language?: 'fr' | 'en',
+  ): Promise<void> {
     const user = await this.userRepository.findByEmail(email);
     if (!user) {
       logger.warn(`Password reset requested for unknown email: ${email}. No email sent.`);
@@ -144,7 +154,11 @@ export class PasswordService {
       let url = referer;
       if (url && url.endsWith('/')) url = url.substring(0, url.length - 1);
       if (!url) url = config.FRONTEND_URL || 'http://localhost:8080';
-      await redis.setEx(`api:users:reset-password:${code}`, CONFIRM_CODE_EXPIRE_SECONDS, user.id.toString());
+      await redis.setEx(
+        `api:users:reset-password:${code}`,
+        CONFIRM_CODE_EXPIRE_SECONDS,
+        user.id.toString(),
+      );
       const resetUrl = `${url}/reset-password?code=${code}`;
       const lang = language || user.preferences?.language || 'en';
       const { subject, html } = this.renderPasswordEmailTemplate(
@@ -193,9 +207,11 @@ export class PasswordService {
     logger.info(`[confirmPasswordChange] Attempting to delete Redis key: ${redisKey}`);
     try {
       const delResult = await redis.del(redisKey);
-      logger.info(`[confirmPasswordChange] Redis key deletion attempted for: ${redisKey}. Result: ${delResult}`);
+      logger.info(
+        `[confirmPasswordChange] Redis key deletion attempted for: ${redisKey}. Result: ${delResult}`,
+      );
     } catch (delError) {
-       logger.error(delError, `[confirmPasswordChange] Failed to delete Redis key: ${redisKey}`);
+      logger.error(delError, `[confirmPasswordChange] Failed to delete Redis key: ${redisKey}`);
     }
     await this.userRepository.updatePasswordStatus(userId, PasswordStatus.ACTIVE);
 
@@ -261,7 +277,9 @@ export class PasswordService {
       logger.info(`[resetPasswordWithCode] Attempting to delete Redis key: ${redisKey}`);
       try {
         const delResult = await redis.del(redisKey);
-        logger.info(`[resetPasswordWithCode] Redis key deletion attempted for: ${redisKey}. Result: ${delResult}`);
+        logger.info(
+          `[resetPasswordWithCode] Redis key deletion attempted for: ${redisKey}. Result: ${delResult}`,
+        );
       } catch (delError) {
         logger.error(delError, `[resetPasswordWithCode] Failed to delete Redis key: ${redisKey}`);
       }
@@ -285,7 +303,7 @@ export class PasswordService {
    */
   async updatePasswordStatus(userId: number, status: PasswordStatus): Promise<void> {
     try {
-      const result = await this.userRepository.updatePasswordStatus(userId,status);
+      const result = await this.userRepository.updatePasswordStatus(userId, status);
 
       if (result.affected === 0) {
         logger.warn(
@@ -305,7 +323,12 @@ export class PasswordService {
    * @param params Object containing userId or email, new password, and optional referer
    * @returns True if the password was updated and confirmation email sent
    */
-  async updateExpiredPassword(params: { userId?: number; email?: string; password: string; referer?: string }): Promise<boolean> {
+  async updateExpiredPassword(params: {
+    userId?: number;
+    email?: string;
+    password: string;
+    referer?: string;
+  }): Promise<boolean> {
     const { userId, email, password, referer } = params;
     if (!userId && !email) throw new NotFoundError('userId or email have to be provided');
     let user: User | null = null;
@@ -320,7 +343,6 @@ export class PasswordService {
       throw new BadRequestError('Password security is too low');
     }
 
-
     const hashedInputPassword = await this.hashPassword(password);
     if (hashedInputPassword === user.password) {
       throw new ParameterError(PARAMETER_ERRORS.PASSWORD_IDENTICAL);
@@ -330,7 +352,11 @@ export class PasswordService {
     if (isSame) throw new BadRequestError('New password must be different from the old one');
 
     const hashedPassword = await this.hashPassword(password);
-    await this.userRepository.updatePasswordAndStatus(user.id, hashedPassword, PasswordStatus.VALIDATING);
+    await this.userRepository.updatePasswordAndStatus(
+      user.id,
+      hashedPassword,
+      PasswordStatus.VALIDATING,
+    );
 
     await this.sendPasswordConfirmationEmail(user, referer);
 

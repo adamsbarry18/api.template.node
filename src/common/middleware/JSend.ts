@@ -1,4 +1,5 @@
-import { Request, Response, NextFunction } from '@/config/http';
+import { type Request, type Response, type NextFunction } from '@/config/http';
+
 import { BaseError } from '../errors/httpErrors';
 export interface IJSendHelper {
   success(data?: any): void;

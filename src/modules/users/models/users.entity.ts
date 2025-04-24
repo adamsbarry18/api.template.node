@@ -1,6 +1,7 @@
+import bcrypt from 'bcryptjs';
 import { Entity, Column, BeforeInsert, BeforeUpdate, Unique } from 'typeorm';
 import { z } from 'zod';
-import bcrypt from 'bcryptjs';
+
 import { Model } from '../../../common/models/Model';
 
 export enum SecurityLevel {

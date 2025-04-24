@@ -1,5 +1,6 @@
-import { Request, Response, NextFunction } from '@/config/http';
+import { type Request, type Response, type NextFunction } from '@/config/http';
 import logger from '@/lib/logger';
+
 import { BadRequestError } from '../errors/httpErrors';
 
 const DEFAULT_PAGE_LIMIT = 10;
@@ -74,7 +75,7 @@ export const parseSorting =
         throw new BadRequestError('Invalid "sortOrder" query parameter. Must be "ASC" or "DESC".');
       }
 
-      const sortOrder = sortOrderQuery as 'ASC' | 'DESC';
+      const sortOrder = sortOrderQuery;
       if (Array.isArray(allowedFields) && !allowedFields.includes(sortBy)) {
         throw new BadRequestError(
           `Invalid "sortBy" query parameter. Allowed fields: ${allowedFields.join(', ')}.`,

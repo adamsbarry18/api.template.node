@@ -1,20 +1,23 @@
 import os from 'os';
-import express, { Express, NextFunction } from 'express';
+
+import compression from 'compression';
+import cookieParser from 'cookie-parser';
 import cors from 'cors';
+import express, { type Express, type NextFunction } from 'express';
 import helmet from 'helmet';
 import passport from 'passport';
 import swaggerUi from 'swagger-ui-express';
-import compression from 'compression';
-import cookieParser from 'cookie-parser';
-import { Request, Response } from './config/http';
+
+import { initializedApiRouter } from '@/api';
+import { NotFoundError } from '@/common/errors/httpErrors';
+import { errorHandler } from '@/common/middleware/errorHandler';
+import { jsendMiddleware } from '@/common/middleware/JSend';
 import config from '@/config';
 import logger from '@/lib/logger';
 import swaggerSpec from '@/lib/openapi';
-import { errorHandler } from '@/common/middleware/errorHandler';
-import { jsendMiddleware } from '@/common/middleware/JSend';
+
 import { passportAuthenticationMiddleware } from './common/middleware/authentication';
-import { NotFoundError } from '@/common/errors/httpErrors';
-import { initializedApiRouter } from '@/api';
+import { type Request, type Response } from './config/http';
 
 const HOSTNAME = os.hostname();
 
@@ -96,8 +99,8 @@ app.use(
     customSiteTitle: 'API Documentation',
     swaggerOptions: {
       persistAuthorization: true,
-      defaultModelsExpandDepth: -1, 
-      docExpansion: 'none', 
+      defaultModelsExpandDepth: -1,
+      docExpansion: 'none',
       filter: true,
     },
     customCss: '.swagger-ui .topbar { display: none }',
@@ -138,9 +141,11 @@ app.get('/', (req: Request, res: Response) => {
 
     // Global Error Handler: The very last middleware
     app.use(errorHandler);
-
   } catch (error) {
-    logger.fatal({ err: error }, '❌ Failed to initialize and mount API router. Application might not function correctly.');
+    logger.fatal(
+      { err: error },
+      '❌ Failed to initialize and mount API router. Application might not function correctly.',
+    );
 
     // Mount a fallback error handler if API router fails
     app.use('/api/v1', (req, res, next) => {

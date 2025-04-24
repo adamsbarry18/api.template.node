@@ -88,7 +88,6 @@ Remove-Item -Recurse -Force node_modules, package-lock.json; npm install
 - ┣ 📜.env.test
 - ┣ 📜.eslintcache
 - ┣ 📜.eslintignore
-- ┣ 📜.eslintrc.js
 - ┣ 📜.gitignore
 - ┣ 📜.prettierrc.js
 - ┣ 📜Dockerfile
@@ -96,4 +95,4 @@ Remove-Item -Recurse -Force node_modules, package-lock.json; npm install
 - ┣ 📜package.json
 - ┣ 📜README.md
 - ┣ 📜tsconfig.json
-- ┗ 📜vitest.config.ts
+- ┗ 📜vitest.config.mts

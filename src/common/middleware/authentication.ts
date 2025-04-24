@@ -1,12 +1,12 @@
-import { AnyZodObject, ZodError } from 'zod';
+import passport from 'passport';
 import {
   Strategy as JwtStrategy,
   ExtractJwt,
-  StrategyOptions,
-  VerifiedCallback,
+  type StrategyOptions,
+  type VerifiedCallback,
 } from 'passport-jwt';
-import passport from 'passport';
-import { NextFunction, Request, Response } from '@/config/http';
+import { type AnyZodObject, ZodError } from 'zod';
+
 import {
   ForbiddenError,
   UnauthorizedError,
@@ -15,14 +15,18 @@ import {
   ServerError,
   BaseError,
 } from '@/common/errors/httpErrors';
-import logger from '@/lib/logger';
-import { CustomJwtPayload } from '@/common/types';
-import { AuthenticatedUser } from '@/config/http';
+import { type CustomJwtPayload } from '@/common/types';
 import config from '@/config';
-
-import { UsersService } from '@/modules/users/services/users.services';
-import { LoginService } from '@/modules/auth/services/login.services';
+import {
+  type NextFunction,
+  type Request,
+  type Response,
+  type AuthenticatedUser,
+} from '@/config/http';
+import logger from '@/lib/logger';
 import { AuthorizationService } from '@/modules/auth/services/authorization.service';
+import { LoginService } from '@/modules/auth/services/login.services';
+import { UsersService } from '@/modules/users/services/users.services';
 
 type StrategyOptionsWithRequest = StrategyOptions & {
   passReqToCallback: true;

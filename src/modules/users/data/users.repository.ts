@@ -1,7 +1,16 @@
-import { Repository, DataSource, FindOptionsWhere, IsNull, Not, UpdateResult } from 'typeorm';
-import { AppDataSource } from '@/database/data-source';
-import { PasswordStatus, SecurityLevel, User } from '../models/users.entity';
+import {
+  type Repository,
+  type DataSource,
+  type FindOptionsWhere,
+  IsNull,
+  Not,
+  type UpdateResult,
+} from 'typeorm';
+
 import { ServerError } from '@/common/errors/httpErrors';
+import { AppDataSource } from '@/database/data-source';
+
+import { type PasswordStatus, SecurityLevel, User } from '../models/users.entity';
 
 // Options for user search queries
 interface FindUserOptions {

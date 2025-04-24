@@ -1,9 +1,12 @@
-import swaggerJSDoc from 'swagger-jsdoc';
 import path from 'path';
+
+import swaggerJSDoc from 'swagger-jsdoc';
+
 import config from '@/config';
-import { UserSchemas } from './openapi-schemas/users/user.schemas';
-import { AuthSchemas } from './openapi-schemas/users/login.schemas';
+
 import { AuthorizationSchemas } from './openapi-schemas/users/authorization.schemas';
+import { AuthSchemas } from './openapi-schemas/users/login.schemas';
+import { UserSchemas } from './openapi-schemas/users/user.schemas';
 
 const swaggerDefinition = {
   openapi: '3.0.3',

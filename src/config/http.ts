@@ -1,8 +1,15 @@
-import express from 'express';
-import { IJSendHelper } from '../common/middleware/JSend';
-import { User as UserEntity } from '@/modules/users/models/users.entity';
-import { FilterInfo, PaginationInfo, SortInfo } from '../common/middleware/queryParssing';
-import { JwtPayload } from 'jsonwebtoken';
+import { type JwtPayload } from 'jsonwebtoken';
+
+import { type User as UserEntity } from '@/modules/users/models/users.entity';
+
+import { type IJSendHelper } from '../common/middleware/JSend';
+import {
+  type FilterInfo,
+  type PaginationInfo,
+  type SortInfo,
+} from '../common/middleware/queryParssing';
+
+import type express from 'express';
 
 declare global {
   namespace Express {

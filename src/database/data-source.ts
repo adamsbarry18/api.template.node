@@ -1,7 +1,7 @@
 import 'reflect-metadata';
-import { DataSource, DataSourceOptions } from 'typeorm';
+import { DataSource, type DataSourceOptions } from 'typeorm';
+
 import config from '@/config';
-import path from 'path';
 import { User } from '@/modules/users/models/users.entity';
 
 export const AppDataSourceOptions: DataSourceOptions = {
@@ -12,7 +12,7 @@ export const AppDataSourceOptions: DataSourceOptions = {
   password: config.DB_PASSWORD,
   database: config.DB_NAME,
   synchronize: false,
-  logging: ["error"],
+  logging: ['error'],
   // Use glob pattern to automatically find all entities
   entities: [User],
   migrations: [],

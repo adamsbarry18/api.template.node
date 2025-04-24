@@ -1,19 +1,18 @@
 import http from 'http';
 import os from 'os';
 
-import app from './app'; 
-import config from './config'; 
-import logger from './lib/logger'; 
-import { AppDataSource } from './database/data-source'; 
+import app from './app';
+import config from './config';
+import { AppDataSource } from './database/data-source';
+import logger from './lib/logger';
 import { initializeRedis, getRedisClient } from './lib/redis';
 
-
 const hostname = os.hostname();
-const READINESS_PROBE_DELAY_MS = 15 * 1000; 
-const SHUTDOWN_TIMEOUT_MS = 10 * 1000; 
+const READINESS_PROBE_DELAY_MS = 15 * 1000;
+const SHUTDOWN_TIMEOUT_MS = 10 * 1000;
 
 let server: http.Server;
-let isShuttingDown = false; 
+let isShuttingDown = false;
 
 // --- Gestion Globale des Erreurs Processus Node ---
 process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
@@ -63,14 +62,13 @@ async function initializeExternalConnections(): Promise<void> {
       logger.error({ err: redisError }, '❌ Error during Redis initialization.');
     }
 
-
     logger.info('External connections initialization complete.');
   } catch (error: unknown) {
     logger.fatal(
       { err: error },
       '❌ Critical error during external connections initialization. Exiting.',
     );
-    throw error; 
+    throw error;
   }
 }
 
@@ -156,7 +154,6 @@ async function startServer(): Promise<void> {
     `🚀 Starting Application [${config.NODE_ENV}] on ${hostname} (PID: ${process.pid})...`,
   );
   logger.info('=======================================================');
-  
 
   // Initialiser les connexions externes AVANT de démarrer le serveur HTTP
   await initializeExternalConnections();
@@ -166,8 +163,8 @@ async function startServer(): Promise<void> {
   server.on('error', (error: NodeJS.ErrnoException) => {
     logger.fatal({ err: error }, '❌ HTTP server error');
     if (error.syscall !== 'listen') {
-      gracefulShutdown('serverError').catch(() => process.exit(1)); 
-      return; 
+      gracefulShutdown('serverError').catch(() => process.exit(1));
+      return;
     }
     switch (error.code) {
       case 'EACCES':
@@ -179,7 +176,7 @@ async function startServer(): Promise<void> {
       default:
         logger.fatal(`Unhandled listen error: ${error.code}. Exiting.`);
     }
-    process.exit(1); 
+    process.exit(1);
   });
 
   server.listen(config.PORT, config.HOST, () => {
@@ -190,10 +187,13 @@ async function startServer(): Promise<void> {
     logger.info(`✅ Server listening on http://${config.HOST}:${config.PORT}`);
     logger.info(`✅ API Docs available at ${apiUrl}/api-docs`);
     logger.info(`   Environment: ${config.NODE_ENV}`);
-    logger.info(`   Database: ${config.DB_TYPE} on ${config.DB_HOST}:${config.DB_PORT}:${config.DB_NAME} (${AppDataSource.isInitialized ? 'Connected' : 'Disconnected'})`);
-    logger.info(`   Redis: ${redisClient?.isOpen ? 'Connected' : 'Disconnected'} to ${config.REDIS_HOST}:${config.REDIS_PORT}`);
+    logger.info(
+      `   Database: ${config.DB_TYPE} on ${config.DB_HOST}:${config.DB_PORT}:${config.DB_NAME} (${AppDataSource.isInitialized ? 'Connected' : 'Disconnected'})`,
+    );
+    logger.info(
+      `   Redis: ${redisClient?.isOpen ? 'Connected' : 'Disconnected'} to ${config.REDIS_HOST}:${config.REDIS_PORT}`,
+    );
     logger.info('=======================================================');
-    
   });
 
   // Attacher les handlers de signaux pour le graceful shutdown

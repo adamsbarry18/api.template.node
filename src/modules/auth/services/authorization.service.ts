@@ -1,14 +1,16 @@
 import dayjs from 'dayjs';
-import {
-  FEATURES_CONFIG,
-  featuresProcessedFlagsMap,
-  DecodedAuthorisations,
-} from '../models/features';
-import { SecurityLevel } from '@/modules/users/models/users.entity';
-import { UserRepository } from '@/modules/users/data/users.repository';
+
 import { NotFoundError } from '@/common/errors/httpErrors';
 import logger from '@/lib/logger';
 import { redisClient } from '@/lib/redis';
+import { UserRepository } from '@/modules/users/data/users.repository';
+import { SecurityLevel } from '@/modules/users/models/users.entity';
+
+import {
+  FEATURES_CONFIG,
+  featuresProcessedFlagsMap,
+  type DecodedAuthorisations,
+} from '../models/features';
 
 const REDIS_AUTHORISATION_KEY_PATTERN = 'api:users:user_authorisation:{userId}';
 const AUTHORISATION_CACHE_TTL_SECONDS = 60 * 30; // 30 minutes
@@ -411,14 +413,14 @@ export class AuthorizationService {
     return defaultMask;
   }
 
-    /**
+  /**
    * Returns a singleton instance of AuthorizationService.
    * @returns The AuthorizationService instance.
    */
-    static getInstance(): AuthorizationService {
-      if (!instance) {
-        instance = new AuthorizationService(new UserRepository());
-      }
-      return instance;
+  static getInstance(): AuthorizationService {
+    if (!instance) {
+      instance = new AuthorizationService(new UserRepository());
     }
+    return instance;
+  }
 }

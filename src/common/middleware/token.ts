@@ -1,9 +1,16 @@
-import logger from '@/lib/logger';
 import jwt, { type JwtPayload } from 'jsonwebtoken';
-import { ExpressMiddleware, NextFunction, Request, Response } from '../../config/http';
+
+import logger from '@/lib/logger';
 import { LoginService } from '@/modules/auth/services/login.services';
+import { type User } from '@/modules/users/models/users.entity';
+
+import {
+  type ExpressMiddleware,
+  type NextFunction,
+  type Request,
+  type Response,
+} from '../../config/http';
 import { UnauthorizedError } from '../errors/httpErrors';
-import { User } from '@/modules/users/models/users.entity';
 
 const loginService = LoginService.getInstance();
 

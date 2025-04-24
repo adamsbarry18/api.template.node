@@ -1,6 +1,7 @@
-import { AnyZodObject } from 'zod';
-import { RequestHandler } from 'express';
-import { AuthorisationRule } from '@/modules/users/models/users.entity';
+import { type RequestHandler } from 'express';
+import { type AnyZodObject } from 'zod';
+
+import { type AuthorisationRule } from '@/modules/users/models/users.entity';
 
 /** Defines the allowed HTTP methods for routes. */
 export type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
@@ -86,7 +87,7 @@ export class MetadataStorage {
     handlerName: string | symbol,
     update: Partial<RouteMetadataArgs>,
   ) {
-    let route = this.routes.find((r) => r.target === target && r.handlerName === handlerName);
+    const route = this.routes.find((r) => r.target === target && r.handlerName === handlerName);
     if (route) {
       Object.assign(route, update);
     } else {

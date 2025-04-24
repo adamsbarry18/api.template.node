@@ -1,12 +1,14 @@
-import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
+import { describe, it, expect, beforeAll } from 'vitest';
+
 import app from '@/app';
-import { redisClient } from '@/lib/redis';
 import { AppDataSource } from '@/database/data-source';
+import { redisClient } from '@/lib/redis';
 import { User } from '@/modules/users/models/users.entity';
+
 import { PasswordService } from '../services/password.services';
 
-const passwordService = PasswordService.getInstance()
+const passwordService = PasswordService.getInstance();
 
 const testEmail = 'user.test2@example.com';
 let currentPassword = 'Password123!';
@@ -114,7 +116,7 @@ describe('Auth API', () => {
 
       // Vérifie que le code a été supprimé de Redis
       if (redisClient) {
-        await new Promise(res => setTimeout(res, 1000));
+        await new Promise((res) => setTimeout(res, 1000));
         const exists = await redisClient.get(`api:users:reset-password:${resetCode}`);
         expect(exists).toBeFalsy();
       }
@@ -130,7 +132,10 @@ describe('Auth API', () => {
     it('should update expired password and send confirmation email (simulate)', async () => {
       // Simule un mot de passe expiré pour le test user
       const userRepo = AppDataSource.getRepository('User');
-      await userRepo.update({ email: testEmail }, { passwordStatus: 'EXPIRED', passwordUpdatedAt: new Date('2000-01-01') });
+      await userRepo.update(
+        { email: testEmail },
+        { passwordStatus: 'EXPIRED', passwordUpdatedAt: new Date('2000-01-01') },
+      );
 
       const newPassword = 'ExpiredPwd1!';
       const res = await request(app)
@@ -152,20 +157,18 @@ describe('Auth API', () => {
 
   describe('POST /auth/password/:code/confirm', () => {
     it('should fail with invalid code', async () => {
-      const res = await request(app)
-        .post('/api/v1/auth/password/invalidcode/confirm');
+      const res = await request(app).post('/api/v1/auth/password/invalidcode/confirm');
       expect(res.status).toBe(400);
     });
 
     it('should confirm password change with code', async () => {
-      const res = await request(app)
-        .post(`/api/v1/auth/password/${confirmCode}/confirm`);
+      const res = await request(app).post(`/api/v1/auth/password/${confirmCode}/confirm`);
       expect(res.status).toBe(200);
       expect(res.body.data.message).toMatch(/Password confirmed/i);
 
       // Vérifie que le code a été supprimé de Redis
       if (redisClient) {
-        await new Promise(res => setTimeout(res, 100));
+        await new Promise((res) => setTimeout(res, 100));
         const exists = await redisClient.get(`api:users:confirm-password:${confirmCode}`);
         expect(exists).toBeFalsy();
       }
@@ -174,15 +177,14 @@ describe('Auth API', () => {
 
   describe('POST /auth/token/refresh', () => {
     it('should fail to refresh token without auth', async () => {
-      const res = await request(app)
-        .post('/api/v1/auth/token/refresh');
+      const res = await request(app).post('/api/v1/auth/token/refresh');
       expect(res.status).toBe(401);
     });
 
     it('should refresh token with valid user', async () => {
       const loginRes = await request(app)
         .post('/api/v1/auth/login')
-        .send({ email: testEmail, password: currentPassword }); 
+        .send({ email: testEmail, password: currentPassword });
       expect(loginRes.status).toBe(200);
       const freshToken = loginRes.body.data.token;
       expect(freshToken).toBeTruthy();

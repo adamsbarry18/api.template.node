@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
 import request from 'supertest';
 import { v4 as uuidv4 } from 'uuid';
+import { describe, it, expect } from 'vitest';
+
 import app from '@/app';
 import { adminToken } from '@/tests/globalSetup';
 
@@ -14,7 +15,8 @@ const zombieUserMail = `ztest-user${uid}@yopmail.com`;
 describe('Users API', () => {
   describe('POST /users', () => {
     it('should create user', async () => {
-      const res = await request(app).post('/api/v1/users')
+      const res = await request(app)
+        .post('/api/v1/users')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           email: userMail,
@@ -34,7 +36,8 @@ describe('Users API', () => {
       createdUserId = res.body.data.id;
     });
     it('should fail to create invalid user', async () => {
-      const res = await request(app).post('/api/v1/users')
+      const res = await request(app)
+        .post('/api/v1/users')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           status: 'active',
@@ -48,13 +51,17 @@ describe('Users API', () => {
 
   describe('GET /users', () => {
     it('should return users', async () => {
-      const res = await request(app).get('/api/v1/users')
+      const res = await request(app)
+        .get('/api/v1/users')
         .set('Authorization', `Bearer ${adminToken}`);
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('success');
       expect(res.body).toHaveProperty('data');
       const users = Array.isArray(res.body.data.data)
-        ? res.body.data.data: Array.isArray(res.body.data)? res.body.data: [];
+        ? res.body.data.data
+        : Array.isArray(res.body.data)
+          ? res.body.data
+          : [];
       expect(Array.isArray(users)).toBe(true);
       for (const entry of users) {
         expect(entry).toHaveProperty('email');
@@ -77,13 +84,15 @@ describe('Users API', () => {
 
   describe('GET /users/:id', () => {
     it('should fail to get user with invalid id', async () => {
-      const res = await request(app).get('/api/v1/users/-1')
+      const res = await request(app)
+        .get('/api/v1/users/-1')
         .set('Authorization', `Bearer ${adminToken}`);
       expect(res.status).toBe(404);
       expect(res.body.status).toBe('fail');
     });
     it('should get user from valid id', async () => {
-      const res = await request(app).get(`/api/v1/users/${createdUserId}`)
+      const res = await request(app)
+        .get(`/api/v1/users/${createdUserId}`)
         .set('Authorization', `Bearer ${adminToken}`);
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('success');
@@ -117,8 +126,7 @@ describe('Users API', () => {
     });
 
     it('should fail without token', async () => {
-      const res = await request(app)
-        .get('/api/v1/users/me');
+      const res = await request(app).get('/api/v1/users/me');
       expect(res.status).toBe(401);
       expect(res.body.status).toBe('fail');
     });
@@ -126,14 +134,16 @@ describe('Users API', () => {
 
   describe('PUT /users/:id', () => {
     it('should fail to edit user with invalid id', async () => {
-      const res = await request(app).put('/api/v1/users/-1')
+      const res = await request(app)
+        .put('/api/v1/users/-1')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ name: 'fail' });
       expect(res.status).toBe(404);
       expect(res.body.status).toBe('fail');
     });
     it('should edit user from valid id', async () => {
-      const res = await request(app).put(`/api/v1/users/${createdUserId}`)
+      const res = await request(app)
+        .put(`/api/v1/users/${createdUserId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           name: 'editedname',
@@ -146,7 +156,8 @@ describe('Users API', () => {
     });
 
     it('should check if user was edited correctly', async () => {
-      const res = await request(app).get(`/api/v1/users/${createdUserId}`)
+      const res = await request(app)
+        .get(`/api/v1/users/${createdUserId}`)
         .set('Authorization', `Bearer ${adminToken}`);
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('success');
@@ -277,20 +288,23 @@ describe('Users API', () => {
 
   describe('DELETE /users/:id', () => {
     it('should fail to delete user with invalid id', async () => {
-      const res = await request(app).delete('/api/v1/users/-1')
+      const res = await request(app)
+        .delete('/api/v1/users/-1')
         .set('Authorization', `Bearer ${adminToken}`);
       expect(res.status).toBe(404);
       expect(res.body.status).toBe('fail');
     });
     it('should delete user from valid id', async () => {
-      const res = await request(app).delete(`/api/v1/users/${createdUserId}`)
+      const res = await request(app)
+        .delete(`/api/v1/users/${createdUserId}`)
         .set('Authorization', `Bearer ${adminToken}`);
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('success');
       expect(res.body.data).toBe('Successfull deletion');
     });
     it('should fail to get deleted user', async () => {
-      const res = await request(app).get(`/api/v1/users/${createdUserId}`)
+      const res = await request(app)
+        .get(`/api/v1/users/${createdUserId}`)
         .set('Authorization', `Bearer ${adminToken}`);
       expect(res.status).toBe(404);
       expect(res.body.status).toBe('fail');
@@ -299,7 +313,8 @@ describe('Users API', () => {
 
   describe('Delete user when it no longer has authorisations', () => {
     it('should create a zombie user', async () => {
-      const res = await request(app).post('/api/v1/users')
+      const res = await request(app)
+        .post('/api/v1/users')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           email: zombieUserMail,
@@ -313,20 +328,23 @@ describe('Users API', () => {
       zombieUserId = res.body.data.id;
     });
     it('should delete zombie user', async () => {
-      const res = await request(app).delete(`/api/v1/users/${zombieUserId}`)
+      const res = await request(app)
+        .delete(`/api/v1/users/${zombieUserId}`)
         .set('Authorization', `Bearer ${adminToken}`);
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('success');
       expect(res.body.data).toBe('Successfull deletion');
     });
     it('should fail to get deleted zombie user', async () => {
-      const res = await request(app).get(`/api/v1/users/${zombieUserId}`)
+      const res = await request(app)
+        .get(`/api/v1/users/${zombieUserId}`)
         .set('Authorization', `Bearer ${adminToken}`);
       expect(res.status).toBe(404);
       expect(res.body.status).toBe('fail');
     });
     it('should resurrect zombie user', async () => {
-      const res = await request(app).post('/api/v1/users')
+      const res = await request(app)
+        .post('/api/v1/users')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           email: zombieUserMail,
@@ -340,7 +358,8 @@ describe('Users API', () => {
       zombieUserId = res.body.data.id;
     });
     it('should get resurrected user', async () => {
-      const res = await request(app).get(`/api/v1/users/${zombieUserId}`)
+      const res = await request(app)
+        .get(`/api/v1/users/${zombieUserId}`)
         .set('Authorization', `Bearer ${adminToken}`);
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('success');

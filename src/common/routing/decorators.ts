@@ -1,7 +1,9 @@
-import { AnyZodObject } from 'zod';
-import { globalMetadataStorage, HttpMethod } from './metadata.storage';
-import { RequestHandler } from 'express';
-import { AuthorisationRule } from '@/modules/users/models/users.entity';
+import { type RequestHandler } from 'express';
+import { type AnyZodObject } from 'zod';
+
+import { type AuthorisationRule } from '@/modules/users/models/users.entity';
+
+import { globalMetadataStorage, type HttpMethod } from './metadata.storage';
 import logger from '../../lib/logger';
 
 /**

@@ -1,6 +1,5 @@
+import { ForbiddenError, UnauthorizedError } from '@/common/errors/httpErrors';
 import { BaseRouter } from '@/common/routing/BaseRouter';
-import { UsersService } from './services/users.services';
-import { Request, Response, NextFunction } from '@/config/http';
 import {
   Get,
   Post,
@@ -14,8 +13,10 @@ import {
   filterable,
   searchable,
 } from '@/common/routing/decorators';
-import { ForbiddenError, UnauthorizedError } from '@/common/errors/httpErrors';
+import { Request, Response, NextFunction } from '@/config/http';
+
 import { SecurityLevel } from './models/users.entity';
+import { UsersService } from './services/users.services';
 
 export default class UserRouter extends BaseRouter {
   UsersService = UsersService.getInstance();
@@ -179,7 +180,7 @@ export default class UserRouter extends BaseRouter {
   async updateUser(req: Request, res: Response, next: NextFunction): Promise<void> {
     const userIdToUpdate = parseInt(req.params.id, 10);
     const updateData = req.body;
-    
+
     if (req.user?.id !== userIdToUpdate && (req.user?.level ?? -1) < SecurityLevel.ADMIN) {
       return next(new ForbiddenError('You can only update your own account'));
     }
@@ -188,7 +189,7 @@ export default class UserRouter extends BaseRouter {
     );
   }
 
-/**
+  /**
    * @openapi
    * /users/{id}:
    *   delete:
@@ -303,7 +304,7 @@ export default class UserRouter extends BaseRouter {
   @authorize({ level: SecurityLevel.READER })
   async resetPreferences(req: Request, res: Response, next: NextFunction): Promise<void> {
     const userId = parseInt(req.params.id, 10);
-        
+
     if (req.user?.id !== userId && (req.user?.level ?? -1) < SecurityLevel.ADMIN) {
       return next(new ForbiddenError('You can only reset your own preferences'));
     }

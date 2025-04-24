@@ -1,15 +1,16 @@
-import { BaseRouter } from '@/common/routing/BaseRouter';
-import { LoginService } from './services/login.services';
-import { Request, Response, NextFunction } from '@/config/http';
-import { Post, authorize, internal } from '@/common/routing/decorators';
 import { UnauthorizedError } from '@/common/errors/httpErrors';
+import { BaseRouter } from '@/common/routing/BaseRouter';
+import { Post, authorize, internal } from '@/common/routing/decorators';
+import { Request, Response, NextFunction } from '@/config/http';
+
+import { LoginService } from './services/login.services';
 import { PasswordService } from './services/password.services';
 import { SecurityLevel } from '../users/models/users.entity';
 
 export default class LoginRouter extends BaseRouter {
   LoginService = LoginService.getInstance();
   PasswordService = PasswordService.getInstance();
-  
+
   /**
    * @openapi
    * /auth/login:
@@ -57,17 +58,23 @@ export default class LoginRouter extends BaseRouter {
    *         description: Logout successful
    */
   @Post('/auth/logout')
-  @authorize({level: SecurityLevel.USER})
+  @authorize({ level: SecurityLevel.USER })
   async logout(req: Request, res: Response, next: NextFunction): Promise<void> {
     const token = req.user?.authToken;
     if (!token) {
       return next(new UnauthorizedError('No authentication token provided'));
     }
 
-    await this.pipe(res, req, next, async () => {
-      this.LoginService.logout(token);
-      return { message: 'Logout successful' };
-    },200);
+    await this.pipe(
+      res,
+      req,
+      next,
+      async () => {
+        this.LoginService.logout(token);
+        return { message: 'Logout successful' };
+      },
+      200,
+    );
   }
 
   /**
@@ -237,7 +244,7 @@ export default class LoginRouter extends BaseRouter {
             email: email,
             password: newPassword,
             referer: referer,
-          })
+          }),
         );
       }
       // Autre erreur d'authentification

@@ -1,11 +1,12 @@
+import request from 'supertest';
 import { beforeAll, afterAll } from 'vitest';
+
 import { initializedApiRouter } from '@/api/index';
+import app from '@/app';
+import { Errors } from '@/common/errors/httpErrors';
 import { AppDataSource } from '@/database/data-source';
 import logger from '@/lib/logger';
-import request from 'supertest';
-import app from '@/app';
 import { redisClient, initializeRedis } from '@/lib/redis';
-import { Errors } from '@/common/errors/httpErrors';
 
 export const adminCredentials = {
   email: 'user.test1@example.com',
@@ -23,7 +24,7 @@ const waitFor = async (fn: () => Promise<any>, label: string, maxTries = 10, del
     } catch (err) {
       tries++;
       logger.warn(`${label} not ready, retrying in ${delay}ms... (${tries}/${maxTries}) ${err}`);
-      await new Promise(res => setTimeout(res, delay));
+      await new Promise((res) => setTimeout(res, delay));
     }
   }
   throw new Errors.ServiceUnavailableError(`${label} not ready after ${maxTries} tries`);
@@ -42,12 +43,9 @@ beforeAll(async () => {
     // 2. Redis
     logger.info('Initializing Redis client for tests...');
     await initializeRedis();
-    await waitFor(
-      async () => {
-        if (!redisClient?.isReady) throw new Errors.ServiceUnavailableError('Redis not ready');
-      },
-      'Redis client'
-    );
+    await waitFor(async () => {
+      if (!redisClient?.isReady) throw new Errors.ServiceUnavailableError('Redis not ready');
+    }, 'Redis client');
 
     // 3. API router
     logger.info('Waiting for dynamic route registration...');
@@ -55,9 +53,7 @@ beforeAll(async () => {
     logger.info('✅ Dynamic routes registration complete.');
 
     // 4. Admin login
-    const loginRes = await request(app)
-      .post('/api/v1/auth/login')
-      .send(adminCredentials);
+    const loginRes = await request(app).post('/api/v1/auth/login').send(adminCredentials);
     const token = loginRes.body?.data?.token;
     if (loginRes.status !== 200 || !token) {
       logger.error({ status: loginRes.status, body: loginRes.body }, 'Admin login failed');

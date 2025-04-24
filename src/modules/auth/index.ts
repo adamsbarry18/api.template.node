@@ -1,10 +1,5 @@
 import { AuthorizationService } from './services/authorization.service';
-import { PasswordService } from './services/password.services';
 import { LoginService } from './services/login.services';
+import { PasswordService } from './services/password.services';
 
-
-export {
-  AuthorizationService,
-  PasswordService,
-  LoginService
-};
+export { AuthorizationService, PasswordService, LoginService };

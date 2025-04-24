@@ -1,11 +1,13 @@
 import jwt from 'jsonwebtoken';
-import { redisClient } from '@/lib/redis';
+
+import { UnauthorizedError, ServerError } from '@/common/errors/httpErrors';
 import config from '@/config';
 import logger from '@/lib/logger';
-import { UnauthorizedError, ServerError } from '@/common/errors/httpErrors';
+import { redisClient } from '@/lib/redis';
 import { UserRepository } from '@/modules/users/data/users.repository';
-import { PasswordStatus, UserApiResponse } from '@/modules/users/models/users.entity';
+import { PasswordStatus, type UserApiResponse } from '@/modules/users/models/users.entity';
 import { UsersService } from '@/modules/users/services/users.services';
+
 import { PasswordService } from './password.services';
 
 const REDIS_TOKEN_INVALIDATION_KEY = 'api:users:token_invalidation:{token}';
@@ -135,7 +137,9 @@ export class LoginService {
     try {
       const res = await redisClient.get(redisKey);
       const isInvalidated = !!res;
-      logger.debug(`Token invalidation check for key ${redisKey}: ${isInvalidated ? 'Invalidated' : 'Valid'}`);
+      logger.debug(
+        `Token invalidation check for key ${redisKey}: ${isInvalidated ? 'Invalidated' : 'Valid'}`,
+      );
       return isInvalidated;
     } catch (error) {
       logger.error(error, `Redis error checking token invalidation for key ${redisKey}`);
@@ -161,7 +165,11 @@ export class LoginService {
    * @param referer Optional referer for context.
    * @returns The new JWT token.
    */
-  async updateExpiredPassword(email: string, newPassword: string, referer?: string): Promise<string> {
+  async updateExpiredPassword(
+    email: string,
+    newPassword: string,
+    referer?: string,
+  ): Promise<string> {
     const success = await this.passwordService.updateExpiredPassword({
       email,
       password: newPassword,

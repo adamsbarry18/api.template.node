@@ -1,5 +1,6 @@
-import dotenv from 'dotenv';
 import path from 'path';
+
+import dotenv from 'dotenv';
 import { z } from 'zod';
 import 'reflect-metadata';
 

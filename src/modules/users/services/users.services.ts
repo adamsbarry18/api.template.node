@@ -1,26 +1,29 @@
 import { randomUUID } from 'crypto';
-import { FindOptionsWhere } from 'typeorm';
+
 import dayjs from 'dayjs';
-import { UserRepository } from '../data/users.repository';
-import logger from '@/lib/logger';
+import { type FindOptionsWhere } from 'typeorm';
+
 import {
   NotFoundError,
   BadRequestError,
   ForbiddenError,
   ServerError,
 } from '@/common/errors/httpErrors';
-import { Request } from '@/config/http';
+import { AuthorizationUtils } from '@/common/utils/AuthorizationUtils';
+import { type Request } from '@/config/http';
+import logger from '@/lib/logger';
+import { PasswordService } from '@/modules/auth/services/password.services';
+
+import { UserRepository } from '../data/users.repository';
 import {
-  CreateUserInput,
-  UpdateUserInput,
-  UserApiResponse,
+  type CreateUserInput,
+  type UpdateUserInput,
+  type UserApiResponse,
   SecurityLevel,
   PasswordStatus,
-  User,
+  type User,
   validationInputErrors,
 } from '../models/users.entity';
-import { PasswordService } from '@/modules/auth/services/password.services';
-import { AuthorizationUtils } from '@/common/utils/AuthorizationUtils';
 
 let instance: UsersService | null = null;
 

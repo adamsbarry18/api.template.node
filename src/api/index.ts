@@ -1,9 +1,11 @@
-import { Router } from 'express';
-import { glob } from 'glob'; // Use async import
 import { resolve } from 'path';
 import { pathToFileURL } from 'url';
-import logger from '../lib/logger';
+
+import { Router } from 'express';
+import { glob } from 'glob'; // Use async import
+
 import { registerRoutes } from '../common/routing/register';
+import logger from '../lib/logger';
 
 /**
  * Dynamically discovers and registers all routes defined in `*.routes.{ts,js}` files
@@ -26,9 +28,14 @@ async function initializeApiRouter(): Promise<Router> {
     // Use async glob
     routeFiles = await glob(globPattern, { absolute: true });
   } catch (error) {
-    logger.error({ err: error }, `Failed to execute glob pattern for route discovery: ${globPattern}`);
+    logger.error(
+      { err: error },
+      `Failed to execute glob pattern for route discovery: ${globPattern}`,
+    );
     // Propagate the error as route discovery is critical
-    throw new Error(`Route discovery failed: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `Route discovery failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 
   if (routeFiles.length === 0) {
@@ -48,7 +55,8 @@ async function initializeApiRouter(): Promise<Router> {
       const importedModule = await import(fileURL);
 
       // Prefer default export, otherwise take the first named export
-      const ControllerClass = importedModule.default || importedModule[Object.keys(importedModule)[0]];
+      const ControllerClass =
+        importedModule.default || importedModule[Object.keys(importedModule)[0]];
 
       if (typeof ControllerClass === 'function' && ControllerClass.prototype) {
         // Assume the class has a name (for logging)
@@ -57,12 +65,19 @@ async function initializeApiRouter(): Promise<Router> {
         // registerRoutes is synchronous in its current design
         registerRoutes(apiRouter, ControllerClass);
       } else {
-        logger.warn(`  Skipping file ${relativePath}: No valid controller class found as default export or first named export. Found type: ${typeof ControllerClass}`);
+        logger.warn(
+          `  Skipping file ${relativePath}: No valid controller class found as default export or first named export. Found type: ${typeof ControllerClass}`,
+        );
       }
     } catch (error) {
-      logger.error({ err: error }, `  Failed to load or register routes from file: ${relativePath}`);
+      logger.error(
+        { err: error },
+        `  Failed to load or register routes from file: ${relativePath}`,
+      );
       // Propagate the error to fail Promise.all
-      throw new Error(`Failed to process route file ${relativePath}: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to process route file ${relativePath}: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   });
 

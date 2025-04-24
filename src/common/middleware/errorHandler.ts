@@ -1,4 +1,9 @@
-import { Request, Response, NextFunction } from '../../config/http';
+import { ZodError } from 'zod';
+
+import config from '@/config';
+import logger from '@/lib/logger';
+
+import { type Request, type Response, type NextFunction } from '../../config/http';
 import {
   BaseError,
   ServerError,
@@ -10,9 +15,6 @@ import {
   DependencyError,
   ServiceUnavailableError,
 } from '../errors/httpErrors';
-import logger from '@/lib/logger';
-import config from '@/config';
-import { ZodError } from 'zod';
 
 export const errorHandler = (err: Error, req: Request, res: Response, next: NextFunction): void => {
   let error: BaseError;

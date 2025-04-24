@@ -1,5 +1,7 @@
-import nodemailer, { Transporter } from 'nodemailer';
+import nodemailer, { type Transporter } from 'nodemailer';
+
 import config from '@/config';
+
 import logger from './logger';
 
 let transporter: Transporter | null = null;

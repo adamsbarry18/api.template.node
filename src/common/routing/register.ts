@@ -1,6 +1,7 @@
-import { Router, RequestHandler } from 'express';
-import { globalMetadataStorage, RouteMetadataArgs } from './metadata.storage';
-import { Request, Response, NextFunction } from '../../config/http';
+import { type Router, type RequestHandler } from 'express';
+
+import { globalMetadataStorage, type RouteMetadataArgs } from './metadata.storage';
+import { type Request, type Response, type NextFunction } from '../../config/http';
 import logger from '../../lib/logger';
 import {
   requireAuth,

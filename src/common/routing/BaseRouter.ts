@@ -1,7 +1,9 @@
-import { Request, Response, NextFunction } from '@/config/http';
-import { Logger } from 'pino';
+import { type Logger } from 'pino';
+
+import { type Request, type Response, type NextFunction } from '@/config/http';
 import logger from '@/lib/logger';
-import { FilterInfo, PaginationInfo, SortInfo } from '../middleware/queryParssing';
+
+import { type FilterInfo, type PaginationInfo, type SortInfo } from '../middleware/queryParssing';
 
 /**
  * Extends the Express Request interface to include properties

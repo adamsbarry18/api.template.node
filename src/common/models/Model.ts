@@ -11,8 +11,9 @@ import {
   BeforeSoftRemove,
   AfterSoftRemove,
 } from 'typeorm';
-import { getRedisClient } from '@/lib/redis';
+
 import logger from '@/lib/logger';
+import { getRedisClient } from '@/lib/redis';
 
 interface IModelDiff {
   changed: string[];

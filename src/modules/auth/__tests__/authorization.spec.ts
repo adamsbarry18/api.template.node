@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+
 import app from '@/app';
 import { adminToken } from '@/tests/globalSetup';
 
@@ -46,8 +47,7 @@ describe('Authorization API', () => {
     });
 
     it('should return 401 if no token is provided', async () => {
-      const res = await request(app)
-        .get('/api/v1/authorization/features');
+      const res = await request(app).get('/api/v1/authorization/features');
       expect(res.status).toBe(401);
       expect(res.body.status).toBe('fail');
     });
@@ -71,8 +71,7 @@ describe('Authorization API', () => {
     });
 
     it('should return 401 if no token is provided', async () => {
-      const res = await request(app)
-        .get('/api/v1/authorization/levels');
+      const res = await request(app).get('/api/v1/authorization/levels');
       expect(res.status).toBe(401);
       expect(res.body.status).toBe('fail');
     });
@@ -93,7 +92,7 @@ describe('Authorization API', () => {
 
     it('should return 200 and empty data for a non-existent numeric level', async () => {
       const res = await request(app)
-        .get('/api/v1/authorization/levels/999') 
+        .get('/api/v1/authorization/levels/999')
         .set('Authorization', `Bearer ${adminToken}`);
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('success');
@@ -102,8 +101,7 @@ describe('Authorization API', () => {
     });
 
     it('should return 401 if no token is provided', async () => {
-      const res = await request(app)
-        .get('/api/v1/authorization/levels/1');
+      const res = await request(app).get('/api/v1/authorization/levels/1');
       expect(res.status).toBe(401);
       expect(res.body.status).toBe('fail');
     });
@@ -133,8 +131,7 @@ describe('Authorization API', () => {
     });
 
     it('should return 401 if no token is provided', async () => {
-      const res = await request(app)
-        .get(`/api/v1/authorization/users/${testUserId}`);
+      const res = await request(app).get(`/api/v1/authorization/users/${testUserId}`);
       expect(res.status).toBe(401);
       expect(res.body.status).toBe('fail');
     });
@@ -154,26 +151,26 @@ describe('Authorization API', () => {
       expect(res.body.data).toHaveProperty('success', true);
     });
 
-     // Removed test for missing level as API currently accepts it (returns 200)
+    // Removed test for missing level as API currently accepts it (returns 200)
 
-     it('should accept an technically invalid level (e.g., 99) and update user', async () => {
-       const expire = new Date(Date.now() + 3600 * 1000).toISOString();
-       const invalidLevel = 99;
-       const res = await request(app)
+    it('should accept an technically invalid level (e.g., 99) and update user', async () => {
+      const expire = new Date(Date.now() + 3600 * 1000).toISOString();
+      const invalidLevel = 99;
+      const res = await request(app)
         .post(`/api/v1/authorization/users/${testUserId}/temporary`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ expire, level: invalidLevel });
-       expect(res.status).toBe(200); // API accepts it currently
-       expect(res.body.status).toBe('success');
+      expect(res.status).toBe(200); // API accepts it currently
+      expect(res.body.status).toBe('success');
 
-       // Verify the level was actually set (even if invalid according to enum)
-       const checkRes = await request(app)
+      // Verify the level was actually set (even if invalid according to enum)
+      const checkRes = await request(app)
         .get(`/api/v1/authorization/users/${testUserId}`)
         .set('Authorization', `Bearer ${adminToken}`);
-       expect(checkRes.body.data.level).toBe(invalidLevel);
+      expect(checkRes.body.data.level).toBe(invalidLevel);
 
-       // Reset level for subsequent tests
-       await request(app)
+      // Reset level for subsequent tests
+      await request(app)
         .put(`/api/v1/authorization/users/${testUserId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ level: 1 });
@@ -202,7 +199,7 @@ describe('Authorization API', () => {
   // --- Test Suite for PUT /authorization/users/:userId ---
   describe('PUT /authorization/users/:userId', () => {
     const newLevel = 1;
-    const overrides = { 'FEATURE_A': { 'CREATE': false } }; // Example override
+    const overrides = { FEATURE_A: { CREATE: false } }; // Example override
 
     it('should update user authorization level', async () => {
       const res = await request(app)
@@ -223,7 +220,7 @@ describe('Authorization API', () => {
       expect(checkRes.body.data.authorisation).not.toHaveProperty('FEATURE_A');
     });
 
-     it('should update user authorization overrides', async () => {
+    it('should update user authorization overrides', async () => {
       const res = await request(app)
         .put(`/api/v1/authorization/users/${testUserId}`)
         .set('Authorization', `Bearer ${adminToken}`)
@@ -244,22 +241,22 @@ describe('Authorization API', () => {
     });
 
     it('should accept an technically invalid level (e.g., 99) and update user', async () => {
-       const invalidLevel = 99;
-       const res = await request(app)
+      const invalidLevel = 99;
+      const res = await request(app)
         .put(`/api/v1/authorization/users/${testUserId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ level: invalidLevel });
-       expect(res.status).toBe(200); // API accepts it currently
-       expect(res.body.status).toBe('success');
+      expect(res.status).toBe(200); // API accepts it currently
+      expect(res.body.status).toBe('success');
 
-        // Verify the level was actually set
-       const checkRes = await request(app)
+      // Verify the level was actually set
+      const checkRes = await request(app)
         .get(`/api/v1/authorization/users/${testUserId}`)
         .set('Authorization', `Bearer ${adminToken}`);
-       expect(checkRes.body.data.level).toBe(invalidLevel);
+      expect(checkRes.body.data.level).toBe(invalidLevel);
 
-        // Reset level for subsequent tests
-       await request(app)
+      // Reset level for subsequent tests
+      await request(app)
         .put(`/api/v1/authorization/users/${testUserId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ level: 1 });
@@ -290,7 +287,7 @@ describe('Authorization API', () => {
       await request(app)
         .put(`/api/v1/authorization/users/${testUserId}`)
         .set('Authorization', `Bearer ${adminToken}`)
-        .send({ level: 2, authorisationOverrides: JSON.stringify({ 'TEST': { 'READ': false } }) });
+        .send({ level: 2, authorisationOverrides: JSON.stringify({ TEST: { READ: false } }) });
       const checkRes = await request(app)
         .get(`/api/v1/authorization/users/${testUserId}`)
         .set('Authorization', `Bearer ${adminToken}`);
@@ -325,8 +322,7 @@ describe('Authorization API', () => {
     });
 
     it('should return 401 if no token is provided', async () => {
-      const res = await request(app)
-        .delete(`/api/v1/authorization/users/${testUserId}`);
+      const res = await request(app).delete(`/api/v1/authorization/users/${testUserId}`);
       expect(res.status).toBe(401);
       expect(res.body.status).toBe('fail');
     });
