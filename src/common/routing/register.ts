@@ -7,6 +7,7 @@ import {
   requireLevel,
   requirePermission,
   validateRequest,
+  requireInternalUser, // <-- ajout
 } from '../middleware/authentication';
 import {
   parseFiltering,
@@ -25,7 +26,7 @@ import {
 export function registerRoutes(
   router: Router,
   ControllerClass: { new (...args: any[]): any },
-  options: { ignoreInternal?: boolean } = { ignoreInternal: true },
+  options: { ignoreInternal?: boolean } = { ignoreInternal: false },
 ): void {
   let instance: any;
   try {
@@ -69,29 +70,26 @@ export function registerRoutes(
     // Build the array of middlewares specific to this method/route
     const methodMiddlewares: RequestHandler[] = [];
 
-    // Step 1: Authentication & Authorization (if defined by @authorize)
-    const authRule = routeMeta.authorization;
-    if (authRule) {
-      methodMiddlewares.push(requireAuth); // Always require authentication if authorization is specified
-
+    // Step 1: Internal route protection
+    if (routeMeta.isInternal) {
+      methodMiddlewares.push(requireAuth, requireInternalUser);
+    }
+    // Step 2: Authorization (if defined by @authorize)
+    else if (routeMeta.authorization) {
+      methodMiddlewares.push(requireAuth);
+      const authRule = routeMeta.authorization;
       if (authRule.level !== undefined) {
         methodMiddlewares.push(requireLevel(authRule.level));
       } else if (authRule.feature && authRule.action) {
         methodMiddlewares.push(requirePermission(authRule.feature, authRule.action));
       }
     }
-
-    // Ajout : si la route est "internal", on force requireAuth même sans @authorize
-    if (routeMeta.isInternal && !authRule) {
-      methodMiddlewares.push(requireAuth);
-    }
-
-    // Step 2: Zod Validation (if defined by @validate)
+    // Step 3: Zod Validation (if defined by @validate)
     if (routeMeta.validationSchema) {
       methodMiddlewares.push(validateRequest(routeMeta.validationSchema));
     }
 
-    // Step 3: Query Parsing Middlewares (added conditionally based on decorators like @paginate, @sortable, etc.)
+    // Step 4: Query Parsing Middlewares (added conditionally based on decorators like @paginate, @sortable, etc.)
     if (routeMeta.canPaginate) {
       methodMiddlewares.push(parsePagination);
     }
@@ -105,7 +103,7 @@ export function registerRoutes(
       methodMiddlewares.push(parseSearch(routeMeta.searchableFields));
     }
 
-    // Step 4: Final Controller Handler (wrapped to catch async errors)
+    // Step 5: Final Controller Handler (wrapped to catch async errors)
     const finalHandlerWrapper: RequestHandler = async (
       req: Request,
       res: Response,

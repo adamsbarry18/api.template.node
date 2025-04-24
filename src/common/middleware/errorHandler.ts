@@ -106,5 +106,10 @@ export const errorHandler = (err: Error, req: Request, res: Response, next: Next
     }
   });
 
-  res.status(error.status).json({ status: 'error', ...errorPayload });
+  // Correction: status 'fail' pour toutes les erreurs contrôlées (4xx), 'error' pour 500+
+  if (error.status >= 400 && error.status < 500) {
+    res.status(error.status).json({ status: 'fail', ...errorPayload });
+  } else {
+    res.status(error.status).json({ status: 'error', ...errorPayload });
+  }
 };

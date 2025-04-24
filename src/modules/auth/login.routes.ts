@@ -1,7 +1,7 @@
 import { BaseRouter } from '@/common/routing/BaseRouter';
 import { LoginService } from './services/login.services';
 import { Request, Response, NextFunction } from '@/config/http';
-import { Post, authorize } from '@/common/routing/decorators';
+import { Post, authorize, internal } from '@/common/routing/decorators';
 import { UnauthorizedError } from '@/common/errors/httpErrors';
 import { PasswordService } from './services/password.services';
 import { SecurityLevel } from '../users/models/users.entity';
@@ -261,7 +261,7 @@ export default class LoginRouter extends BaseRouter {
    *         description: Unauthorized
    */
   @Post('/auth/token/refresh')
-  @authorize({ level: SecurityLevel.USER })
+  @internal()
   async refreshToken(req: Request, res: Response, next: NextFunction): Promise<void> {
     const userId = req.user?.id ?? req.user?.sub;
     if (!userId) {

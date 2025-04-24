@@ -179,12 +179,16 @@ export default class UserRouter extends BaseRouter {
   async updateUser(req: Request, res: Response, next: NextFunction): Promise<void> {
     const userIdToUpdate = parseInt(req.params.id, 10);
     const updateData = req.body;
+    
+    if (req.user?.id !== userIdToUpdate && (req.user?.level ?? -1) < SecurityLevel.ADMIN) {
+      return next(new ForbiddenError('You can only update your own account'));
+    }
     await this.pipe(res, req, next, () =>
       this.UsersService.update(userIdToUpdate, updateData, { requestingUser: req.user }),
     );
   }
 
-  /**
+/**
    * @openapi
    * /users/{id}:
    *   delete:
@@ -212,6 +216,10 @@ export default class UserRouter extends BaseRouter {
   @authorize({ level: SecurityLevel.READER })
   async deleteUser(req: Request, res: Response, next: NextFunction): Promise<void> {
     const userIdToDelete = parseInt(req.params.id, 10);
+
+    if (req.user?.id !== userIdToDelete && (req.user?.level ?? -1) < SecurityLevel.ADMIN) {
+      return next(new ForbiddenError('You can only delete your own account'));
+    }
     await this.pipe(
       res,
       req,
@@ -260,7 +268,6 @@ export default class UserRouter extends BaseRouter {
     const userId = parseInt(req.params.id, 10);
     const preferences = req.body;
 
-    // Vérification que l'utilisateur modifie ses propres préférences ou est un admin
     if (req.user?.id !== userId && (req.user?.level ?? -1) < SecurityLevel.ADMIN) {
       return next(new ForbiddenError('You can only update your own preferences'));
     }
@@ -296,8 +303,7 @@ export default class UserRouter extends BaseRouter {
   @authorize({ level: SecurityLevel.READER })
   async resetPreferences(req: Request, res: Response, next: NextFunction): Promise<void> {
     const userId = parseInt(req.params.id, 10);
-
-    // Vérification que l'utilisateur réinitialise ses propres préférences ou est un admin
+        
     if (req.user?.id !== userId && (req.user?.level ?? -1) < SecurityLevel.ADMIN) {
       return next(new ForbiddenError('You can only reset your own preferences'));
     }

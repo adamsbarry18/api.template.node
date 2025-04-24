@@ -170,10 +170,9 @@ describe('Auth API', () => {
     });
 
     it('should refresh token with valid user', async () => {
-      // Effectue un login juste avant pour garantir un token valide
       const loginRes = await request(app)
         .post('/api/v1/auth/login')
-        .send({ email: testEmail, password: currentPassword }); // <-- utilise le mot de passe courant
+        .send({ email: testEmail, password: currentPassword }); 
       expect(loginRes.status).toBe(200);
       const freshToken = loginRes.body.data.token;
       expect(freshToken).toBeTruthy();

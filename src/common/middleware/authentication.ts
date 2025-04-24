@@ -203,3 +203,23 @@ export const validateRequest =
       }
     }
   };
+
+/**
+ * Middleware: requireInternalUser
+ * Ensures the request is authenticated and the user is an internal user.
+ * You can adapt the logic (e.g., user.isInternal, user.level, etc.).
+ */
+export const requireInternalUser = (req: Request, res: Response, next: NextFunction): void => {
+  if (!req.user) {
+    logger.warn('Internal route access denied: not authenticated.');
+    return next(new UnauthorizedError('Authentication required for internal route.'));
+  }
+  if (!req.user.internal) {
+    logger.warn(
+      `Internal route access denied for user ${req.user.id}: not internal. URL: ${req.originalUrl}`,
+    );
+    return next(new ForbiddenError('Internal access only.'));
+  }
+  logger.debug(`Internal route access granted for user ${req.user.id}.`);
+  next();
+};

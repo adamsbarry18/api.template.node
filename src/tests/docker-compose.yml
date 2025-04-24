@@ -35,6 +35,15 @@ services:
       timeout: 5s
       retries: 5
 
+  mailhog-test:
+    image: mailhog/mailhog:latest
+    container_name: mailhog-test
+    ports:
+      - "1025:1025" # SMTP port
+      - "8025:8025" # Web UI port
+    networks:
+      - test_network
+
 volumes:
   db-data:
   redis_data:

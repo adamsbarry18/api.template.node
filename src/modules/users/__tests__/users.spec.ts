@@ -26,7 +26,11 @@ describe('Users API', () => {
           preferences: { hello: 'world' },
         });
       expect(res.status).toBe(201);
+      expect(res.body.status).toBe('success');
       expect(res.body.data.email).toBe(userMail);
+      expect(res.body.data).not.toHaveProperty('password');
+      expect(res.body.data).toHaveProperty('id');
+      expect(res.body.data).toHaveProperty('createdAt');
       createdUserId = res.body.data.id;
     });
     it('should fail to create invalid user', async () => {
@@ -37,6 +41,8 @@ describe('Users API', () => {
           description: 'invalid user',
         });
       expect(res.status).toBe(400);
+      expect(res.body.status).toBe('fail');
+      expect(res.body).toHaveProperty('data');
     });
   });
 
@@ -45,6 +51,8 @@ describe('Users API', () => {
       const res = await request(app).get('/api/v1/users')
         .set('Authorization', `Bearer ${adminToken}`);
       expect(res.status).toBe(200);
+      expect(res.body.status).toBe('success');
+      expect(res.body).toHaveProperty('data');
       const users = Array.isArray(res.body.data.data)
         ? res.body.data.data: Array.isArray(res.body.data)? res.body.data: [];
       expect(Array.isArray(users)).toBe(true);
@@ -57,6 +65,12 @@ describe('Users API', () => {
         expect(entry).toHaveProperty('updated_time');
         expect(entry).toHaveProperty('preferences');
         expect(entry).toHaveProperty('id');
+        expect(entry).not.toHaveProperty('password');
+      }
+      // Vérifie la pagination si présente
+      if (res.body.meta && res.body.meta.pagination) {
+        expect(res.body.meta.pagination).toHaveProperty('page');
+        expect(res.body.meta.pagination).toHaveProperty('limit');
       }
     });
   });
@@ -66,11 +80,13 @@ describe('Users API', () => {
       const res = await request(app).get('/api/v1/users/-1')
         .set('Authorization', `Bearer ${adminToken}`);
       expect(res.status).toBe(404);
+      expect(res.body.status).toBe('fail');
     });
     it('should get user from valid id', async () => {
       const res = await request(app).get(`/api/v1/users/${createdUserId}`)
         .set('Authorization', `Bearer ${adminToken}`);
       expect(res.status).toBe(200);
+      expect(res.body.status).toBe('success');
       const entry = res.body.data;
       expect(entry.id).toBe(createdUserId);
       expect(entry.email).toBe(userMail);
@@ -82,6 +98,7 @@ describe('Users API', () => {
       expect(entry).toHaveProperty('updated_time');
       expect(entry).toHaveProperty('preferences');
       expect(entry.preferences).toHaveProperty('hello', 'world');
+      expect(entry).not.toHaveProperty('password');
     });
   });
 
@@ -91,16 +108,19 @@ describe('Users API', () => {
         .get('/api/v1/users/me')
         .set('Authorization', `Bearer ${adminToken}`);
       expect(res.status).toBe(200);
+      expect(res.body.status).toBe('success');
       expect(res.body.data).toHaveProperty('email', 'mabarry2018@gmail.com');
       expect(res.body.data).toHaveProperty('id');
       expect(res.body.data).toHaveProperty('name');
       expect(res.body.data).toHaveProperty('surname');
+      expect(res.body.data).not.toHaveProperty('password');
     });
 
     it('should fail without token', async () => {
       const res = await request(app)
         .get('/api/v1/users/me');
       expect(res.status).toBe(401);
+      expect(res.body.status).toBe('fail');
     });
   });
 
@@ -110,6 +130,7 @@ describe('Users API', () => {
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ name: 'fail' });
       expect(res.status).toBe(404);
+      expect(res.body.status).toBe('fail');
     });
     it('should edit user from valid id', async () => {
       const res = await request(app).put(`/api/v1/users/${createdUserId}`)
@@ -119,13 +140,16 @@ describe('Users API', () => {
           preferences: { hello: 'world', hasOnboarding: true },
         });
       expect(res.status).toBe(200);
+      expect(res.body.status).toBe('success');
       expect(res.body.data.name).toBe('editedname');
+      expect(res.body.data.preferences).toHaveProperty('hasOnboarding', true);
     });
 
     it('should check if user was edited correctly', async () => {
       const res = await request(app).get(`/api/v1/users/${createdUserId}`)
         .set('Authorization', `Bearer ${adminToken}`);
       expect(res.status).toBe(200);
+      expect(res.body.status).toBe('success');
       const entry = res.body.data;
       expect(entry.id).toBe(createdUserId);
       expect(entry.name).toBe('editedname');
@@ -141,6 +165,7 @@ describe('Users API', () => {
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ theme: 'dark', lang: 'fr' });
       expect(res.status).toBe(200);
+      expect(res.body.status).toBe('success');
       expect(res.body.data).toHaveProperty('preferences');
       expect(res.body.data.preferences).toHaveProperty('theme', 'dark');
       expect(res.body.data.preferences).toHaveProperty('lang', 'fr');
@@ -175,6 +200,7 @@ describe('Users API', () => {
         .set('Authorization', `Bearer ${userToken}`)
         .send({ theme: 'light' });
       expect(res.status).toBe(403);
+      expect(res.body.status).toBe('fail');
 
       // Try to update own preferences (should fail if user level < READER)
       const resOwn = await request(app)
@@ -182,6 +208,7 @@ describe('Users API', () => {
         .set('Authorization', `Bearer ${userToken}`)
         .send({ theme: 'blue' });
       expect(resOwn.status).toBe(403); // Le niveau minimum requis est READER (2)
+      expect(resOwn.body.status).toBe('fail');
     });
   });
 
@@ -204,6 +231,7 @@ describe('Users API', () => {
         .delete(`/api/v1/users/${userId}/preferences`)
         .set('Authorization', `Bearer ${adminToken}`);
       expect(res.status).toBe(200);
+      expect(res.body.status).toBe('success');
       expect(res.body.data).toHaveProperty('preferences');
       // Optionally: check that preferences are empty or default
     });
@@ -236,12 +264,14 @@ describe('Users API', () => {
         .delete(`/api/v1/users/${createdUserId}/preferences`)
         .set('Authorization', `Bearer ${userToken}`);
       expect(res.status).toBe(403);
+      expect(res.body.status).toBe('fail');
 
       // Try to reset own preferences (should fail if user level < READER)
       const resOwn = await request(app)
         .delete(`/api/v1/users/${userId}/preferences`)
         .set('Authorization', `Bearer ${userToken}`);
       expect(resOwn.status).toBe(403); // Le niveau minimum requis est READER (2)
+      expect(resOwn.body.status).toBe('fail');
     });
   });
 
@@ -250,17 +280,20 @@ describe('Users API', () => {
       const res = await request(app).delete('/api/v1/users/-1')
         .set('Authorization', `Bearer ${adminToken}`);
       expect(res.status).toBe(404);
+      expect(res.body.status).toBe('fail');
     });
     it('should delete user from valid id', async () => {
       const res = await request(app).delete(`/api/v1/users/${createdUserId}`)
         .set('Authorization', `Bearer ${adminToken}`);
       expect(res.status).toBe(200);
+      expect(res.body.status).toBe('success');
       expect(res.body.data).toBe('Successfull deletion');
     });
     it('should fail to get deleted user', async () => {
       const res = await request(app).get(`/api/v1/users/${createdUserId}`)
         .set('Authorization', `Bearer ${adminToken}`);
       expect(res.status).toBe(404);
+      expect(res.body.status).toBe('fail');
     });
   });
 
@@ -276,18 +309,21 @@ describe('Users API', () => {
           level: 2,
         });
       expect(res.status).toBe(201);
+      expect(res.body.status).toBe('success');
       zombieUserId = res.body.data.id;
     });
     it('should delete zombie user', async () => {
       const res = await request(app).delete(`/api/v1/users/${zombieUserId}`)
         .set('Authorization', `Bearer ${adminToken}`);
       expect(res.status).toBe(200);
+      expect(res.body.status).toBe('success');
       expect(res.body.data).toBe('Successfull deletion');
     });
     it('should fail to get deleted zombie user', async () => {
       const res = await request(app).get(`/api/v1/users/${zombieUserId}`)
         .set('Authorization', `Bearer ${adminToken}`);
       expect(res.status).toBe(404);
+      expect(res.body.status).toBe('fail');
     });
     it('should resurrect zombie user', async () => {
       const res = await request(app).post('/api/v1/users')
@@ -300,12 +336,14 @@ describe('Users API', () => {
           level: 2,
         });
       expect(res.status).toBe(201);
+      expect(res.body.status).toBe('success');
       zombieUserId = res.body.data.id;
     });
     it('should get resurrected user', async () => {
       const res = await request(app).get(`/api/v1/users/${zombieUserId}`)
         .set('Authorization', `Bearer ${adminToken}`);
       expect(res.status).toBe(200);
+      expect(res.body.status).toBe('success');
       const user = res.body.data;
       expect(user.id).toBe(zombieUserId);
       expect(user.name).toBe('Monique');

@@ -53,12 +53,45 @@ export function jsendMiddleware(req: Request, res: Response, next: NextFunction)
       errorData: { message: string; code?: string; data?: any } | string | Error | BaseError,
     ): void {
       if (res.headersSent) return;
+      if (res.statusCode < 500 && res.statusCode >= 400) {
+        // 4xx: fail
+        let response: { status: string; message: string; code?: string; data?: any };
+        if (typeof errorData === 'string') {
+          response = { status: 'fail', message: errorData };
+        } else if (errorData instanceof BaseError) {
+          response = {
+            status: 'fail',
+            message: errorData.message,
+            code: errorData.code,
+            data:
+              process.env.NODE_ENV === 'development' || errorData.name === 'ValidationError'
+                ? errorData.data
+                : undefined,
+          };
+        } else if (errorData instanceof Error) {
+          response = {
+            status: 'fail',
+            message:
+              process.env.NODE_ENV === 'development'
+                ? errorData.message
+                : 'A request error occurred',
+          };
+        } else {
+          response = {
+            status: 'fail',
+            message: errorData.message || 'A request error occurred.',
+            code: errorData.code,
+            data: errorData.data,
+          };
+        }
+        res.json(response);
+        return;
+      }
+      // 5xx or default: error
       if (res.statusCode < 500) {
         res.status(500);
       }
-
       let response: { status: string; message: string; code?: string; data?: any };
-
       if (typeof errorData === 'string') {
         response = { status: 'error', message: errorData };
       } else if (errorData instanceof BaseError) {
@@ -71,9 +104,6 @@ export function jsendMiddleware(req: Request, res: Response, next: NextFunction)
               ? errorData.data
               : undefined,
         };
-        if (errorData.status && res.statusCode === 500) {
-          res.status(errorData.status);
-        }
       } else if (errorData instanceof Error) {
         response = {
           status: 'error',
@@ -90,7 +120,6 @@ export function jsendMiddleware(req: Request, res: Response, next: NextFunction)
           data: errorData.data,
         };
       }
-
       res.json(response);
     },
     /**

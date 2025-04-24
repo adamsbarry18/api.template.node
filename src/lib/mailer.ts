@@ -9,7 +9,7 @@ if (config.MAIL_HOST && config.MAIL_PORT && config.MAIL_USER && config.MAIL_PASS
     transporter = nodemailer.createTransport({
       host: config.MAIL_HOST,
       port: config.MAIL_PORT,
-      secure: config.MAIL_SECURE,
+      secure: false,
       auth: {
         user: config.MAIL_USER,
         pass: config.MAIL_PASS,
