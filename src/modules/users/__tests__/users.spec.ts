@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import request from 'supertest';
 import { v4 as uuidv4 } from 'uuid';
 import app from '@/app';
-import { adminToken } from '@/tests/setup';
+import { adminToken } from '@/tests/globalSetup';
 
 let createdUserId: number;
 let zombieUserId: number;
@@ -109,7 +109,7 @@ describe('Users API', () => {
         .set('Authorization', `Bearer ${adminToken}`);
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('success');
-      expect(res.body.data).toHaveProperty('email', 'mabarry2018@gmail.com');
+      expect(res.body.data).toHaveProperty('email', 'user.test1@example.com');
       expect(res.body.data).toHaveProperty('id');
       expect(res.body.data).toHaveProperty('name');
       expect(res.body.data).toHaveProperty('surname');

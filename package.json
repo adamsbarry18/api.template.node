@@ -11,6 +11,7 @@
     "lint:fix": "eslint . --ext .ts --fix --cache",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
     "clean": "rimraf dist && mkdir dist",
+    "test:local": "cross-env NODE_ENV=development dotenv -e .env.local vitest run --color",
     "test": "cross-env NODE_ENV=test dotenv -e .env.test vitest run --color",
     "test-db:start": "docker compose -f src/tests/docker-compose.yml up --build -d",
     "test-db:stop": "docker compose -f src/tests/docker-compose.yml down -v",

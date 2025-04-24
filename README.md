@@ -10,11 +10,6 @@ sudo ss -tuln
 Remove-Item -Recurse -Force node_modules, package-lock.json; npm install
 
 
-{
-  "email": "mabarry2018@gmail.com",
-  "password": "123456PAM$45789asdssMabd58"
-}
-
 - 📦api.template.node
 - ┣ 📂build
 - ┃ ┗ 📂script

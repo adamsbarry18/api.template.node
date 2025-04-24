@@ -7,7 +7,7 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     root: './',
-    setupFiles: ['src/tests/setup.ts'],
+    setupFiles: ['src/tests/globalSetup.ts'],
     include: [
       'src/modules/**/*.spec.ts',
       'src/modules/**/__tests__/**/*.ts',
@@ -20,5 +20,7 @@ export default defineConfig({
     },
     testTimeout: 20000,
     hookTimeout: 60000,
+    maxConcurrency: 1
   },
 });
+

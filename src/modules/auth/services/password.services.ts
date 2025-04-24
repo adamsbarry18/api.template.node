@@ -1,5 +1,4 @@
 import bcrypt from 'bcryptjs';
-import { randomUUID } from 'crypto';
 import dayjs from 'dayjs';
 import { nanoid } from 'nanoid';
 import { UserRepository } from '../../users/data/users.repository';

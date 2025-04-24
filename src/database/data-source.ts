@@ -13,6 +13,7 @@ export const AppDataSourceOptions: DataSourceOptions = {
   database: config.DB_NAME,
   synchronize: false,
   logging: ["error"],
+  // Use glob pattern to automatically find all entities
   entities: [User],
   migrations: [],
   subscribers: [],

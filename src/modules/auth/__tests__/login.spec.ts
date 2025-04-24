@@ -1,12 +1,15 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import app from '@/app';
-import { adminToken } from '@/tests/setup';
 import { redisClient } from '@/lib/redis';
 import { AppDataSource } from '@/database/data-source';
+import { User } from '@/modules/users/models/users.entity';
+import { PasswordService } from '../services/password.services';
+
+const passwordService = PasswordService.getInstance()
 
 const testEmail = 'user.test2@example.com';
-let currentPassword = '123456PAM$45789asdss';
+let currentPassword = 'Password123!';
 
 describe('Auth API', () => {
   let resetCode: string;
@@ -21,6 +24,13 @@ describe('Auth API', () => {
         await redisClient.del(key);
       }
     }
+
+    // Reset test user password to initial state
+    const initialPassword = 'Password123!';
+    const userRepo = AppDataSource.getRepository(User);
+    const hashedPassword = await passwordService.hashPassword(initialPassword);
+    await userRepo.update({ email: testEmail }, { password: hashedPassword });
+    currentPassword = initialPassword;
   });
 
   describe('POST /auth/login', () => {
@@ -42,7 +52,7 @@ describe('Auth API', () => {
         .send({ email: testEmail, password: currentPassword });
       expect(res.status).toBe(200);
       expect(res.body.data.token).toBeTruthy();
-      userToken = res.body.data.token;
+      userToken = res.body.data.token; // Assign token to userToken
     });
   });
 
@@ -55,7 +65,7 @@ describe('Auth API', () => {
     it('should logout successfully', async () => {
       const res = await request(app)
         .post('/api/v1/auth/logout')
-        .set('Authorization', `Bearer ${adminToken}`);
+        .set('Authorization', `Bearer ${userToken}`); // This line should already be correct from the previous attempt, but ensuring it stays
       expect(res.status).toBe(200);
       expect(res.body.data.message).toMatch(/Logout successful/i);
     });
