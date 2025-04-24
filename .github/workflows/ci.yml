@@ -118,9 +118,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # ==========================================
+  # ===========================================
   # Job: Deploy (Manual Trigger)
-  # ==========================================
+  # ===========================================
   deploy:
     name: Deploy Application
     runs-on: ubuntu-latest
