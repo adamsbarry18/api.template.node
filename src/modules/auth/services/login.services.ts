@@ -77,7 +77,10 @@ export class LoginService {
 
     const token = await this.signToken(user.id, { level: user.level, internal: user.internal });
     const userApi = this.usersService.mapToApiResponse(user);
-    return { user: userApi!, token };
+    if (!userApi) {
+      throw new ServerError('Failed to map user data');
+    }
+    return { user: userApi, token };
   }
 
   /**

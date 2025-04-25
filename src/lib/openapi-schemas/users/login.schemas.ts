@@ -1,4 +1,4 @@
-export const AuthSchemas = {
+export const authSchemas = {
   LoginInput: {
     type: 'object',
     required: ['email', 'password'],

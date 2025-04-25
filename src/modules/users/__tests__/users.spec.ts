@@ -68,8 +68,8 @@ describe('Users API', () => {
         expect(entry).toHaveProperty('name');
         expect(entry).toHaveProperty('surname');
         expect(entry).toHaveProperty('level');
-        expect(entry).toHaveProperty('created_time');
-        expect(entry).toHaveProperty('updated_time');
+        expect(entry).toHaveProperty('createdTime');
+        expect(entry).toHaveProperty('updatedTime');
         expect(entry).toHaveProperty('preferences');
         expect(entry).toHaveProperty('id');
         expect(entry).not.toHaveProperty('password');
@@ -103,8 +103,8 @@ describe('Users API', () => {
       expect(entry.surname).toBe('toto');
       expect(entry.color).toBe('#FAFAFA');
       expect(entry.level).toBe(0);
-      expect(entry).toHaveProperty('created_time');
-      expect(entry).toHaveProperty('updated_time');
+      expect(entry).toHaveProperty('createdTime');
+      expect(entry).toHaveProperty('updatedTime');
       expect(entry).toHaveProperty('preferences');
       expect(entry.preferences).toHaveProperty('hello', 'world');
       expect(entry).not.toHaveProperty('password');

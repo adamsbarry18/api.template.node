@@ -45,43 +45,53 @@ const authorizationService = AuthorizationService.getInstance();
 // Use a standard function declaration for export
 export function passportAuthenticationMiddleware(): void {
   passport.use(
-    new JwtStrategy(
-      options,
-      async (req: Request, payload: CustomJwtPayload, done: VerifiedCallback) => {
+    new JwtStrategy(options, (req: Request, payload: CustomJwtPayload, done: VerifiedCallback) => {
+      // Fonction interne async pour contenir la logique asynchrone et satisfaire ESLint
+      const verify = async (): Promise<void> => {
         const rawToken = ExtractJwt.fromAuthHeaderAsBearerToken()(req);
         if (!rawToken) {
-          return done(null, false, { message: 'No Bearer token provided.' });
+          done(null, false, { message: 'No Bearer token provided.' });
+          return;
         }
         try {
           if (await loginService.isTokenInvalidated(rawToken)) {
-            return done(null, false, { message: 'Token invalidated or expired.' });
+            done(null, false, { message: 'Token invalidated or expired.' });
+            return;
           }
 
           const userId = payload.sub;
           if (!userId || typeof userId !== 'number') {
-            return done(null, false, { message: 'Invalid token payload structure.' });
+            done(null, false, { message: 'Invalid token payload structure.' });
+            return;
           }
           const user = await userService.findById(userId);
           if (user) {
-            // Correction : injecte id et sub dans req.user pour compatibilité
             const authenticatedUser = { ...user, authToken: rawToken, id: userId, sub: userId };
-            return done(null, authenticatedUser);
+            done(null, authenticatedUser);
           } else {
             logger.warn(`User not found (ID: ${userId}) for active token. Invalidating token.`);
-            loginService
-              .logout(rawToken)
-              .catch((err) => logger.error(err, 'Error during automatic token logout.'));
-            return done(null, false, { message: 'User not found or disabled.' });
+            try {
+              await loginService.logout(rawToken);
+            } catch (err) {
+              logger.error(err, 'Error during automatic token logout.');
+            }
+            done(null, false, { message: 'User not found or disabled.' });
           }
         } catch (error) {
           if (error instanceof ServiceUnavailableError) {
-            return done(error, false);
+            done(error, false);
+          } else {
+            logger.error(error, 'Unexpected error during JWT strategy execution.');
+            done(error, false);
           }
-          logger.error(error, 'Unexpected error during JWT strategy execution.');
-          return done(error, false);
         }
-      },
-    ),
+      };
+
+      verify().catch((err) => {
+        logger.error(err, 'Unhandled error in JWT strategy verify function.');
+        done(err, false);
+      });
+    }),
   );
 
   logger.info('Passport JWT strategy configured (token + Redis invalidation check).');

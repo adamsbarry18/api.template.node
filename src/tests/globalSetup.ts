@@ -4,7 +4,7 @@ import { beforeAll, afterAll } from 'vitest';
 import { initializedApiRouter } from '@/api/index';
 import app from '@/app';
 import { Errors } from '@/common/errors/httpErrors';
-import { AppDataSource } from '@/database/data-source';
+import { appDataSource } from '@/database/data-source';
 import logger from '@/lib/logger';
 import { redisClient, initializeRedis } from '@/lib/redis';
 
@@ -14,7 +14,7 @@ export const adminCredentials = {
 };
 export let adminToken: string;
 
-const waitFor = async (fn: () => Promise<any>, label: string, maxTries = 10, delay = 300) => {
+const waitFor = async (fn: () => Promise<any>, label: string, maxTries = 15, delay = 100) => {
   let tries = 0;
   while (tries < maxTries) {
     try {
@@ -33,19 +33,23 @@ const waitFor = async (fn: () => Promise<any>, label: string, maxTries = 10, del
 beforeAll(async () => {
   logger.info('Executing global test setup...');
   try {
-    // 1. Database
-    if (!AppDataSource.isInitialized) {
-      logger.info('Initializing TypeORM DataSource for tests...');
-      await AppDataSource.initialize();
-      logger.info('Database initialized.');
-    }
-
-    // 2. Redis
-    logger.info('Initializing Redis client for tests...');
-    await initializeRedis();
-    await waitFor(async () => {
-      if (!redisClient?.isReady) throw new Errors.ServiceUnavailableError('Redis not ready');
-    }, 'Redis client');
+    // Parallélisation de l'init DB et Redis
+    await Promise.all([
+      (async () => {
+        if (!appDataSource.isInitialized) {
+          logger.info('Initializing TypeORM DataSource for tests...');
+          await appDataSource.initialize();
+          logger.info('Database initialized.');
+        }
+      })(),
+      (async () => {
+        logger.info('Initializing Redis client for tests...');
+        await initializeRedis();
+        await waitFor(async () => {
+          if (!redisClient?.isReady) throw new Errors.ServiceUnavailableError('Redis not ready');
+        }, 'Redis client');
+      })()
+    ]);
 
     // 3. API router
     logger.info('Waiting for dynamic route registration...');
@@ -72,8 +76,8 @@ beforeAll(async () => {
 afterAll(async () => {
   logger.info('Executing global test teardown...');
   try {
-    if (AppDataSource.isInitialized) {
-      await AppDataSource.destroy();
+    if (appDataSource.isInitialized) {
+      await appDataSource.destroy();
       logger.info('✅ TypeORM DataSource destroyed.');
     }
     logger.info('🏁 Global test teardown complete.');

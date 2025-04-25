@@ -31,17 +31,8 @@ coverage
 .nyc_output
 
 # Environment files
-.env.test
-.env.development
-.env.production
-.env.local
-.env.example
+.env*
 
-# Prisma
-prisma/migrations/*.sql # Peut être versionné si souhaité, mais souvent généré
-# Si vous utilisez SQLite pour les tests ou dev
-*.db
-*.db-journal
 
 # IDE config files
 .idea

@@ -62,8 +62,8 @@ export type UserApiResponse = {
   passwordUpdatedAt: string | null;
   preferences: Record<string, any> | null;
   permissionsExpireAt: string | null;
-  created_time?: Date;
-  updated_time?: Date;
+  createdTime?: Date;
+  updatedTime?: Date;
 };
 
 // Interne type for decode overrides
@@ -159,7 +159,7 @@ export class User extends Model {
    * Formate les données de l'entité pour une réponse API en excluant les champs sensibles.
    * @returns l'objet formaté pour l'API.
    */
-  toApi() {
+  toApi(): UserApiResponse {
     const base = super.toApi();
     const res = {
       ...base,

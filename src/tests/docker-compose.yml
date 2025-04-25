@@ -9,16 +9,18 @@ services:
       MYSQL_PASSWORD: test_pwd
     ports:
       - "3307:3306"
+    # Utilisation d'un volume temporaire pour accélérer les tests (pas de persistance disque)
+    tmpfs:
+      - /var/lib/mysql
     volumes:
-      - db-data:/var/lib/mysql
       - ./db-data:/docker-entrypoint-initdb.d
     networks:
       - test_network
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
+      interval: 2s
+      timeout: 2s
+      retries: 10
 
   redis-test:
     image: redis:7-alpine
@@ -31,9 +33,9 @@ services:
       - test_network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      interval: 2s
+      timeout: 2s
+      retries: 10
 
   mailhog-test:
     image: mailhog/mailhog:latest

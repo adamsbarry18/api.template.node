@@ -4,7 +4,7 @@ import { DataSource, type DataSourceOptions } from 'typeorm';
 import config from '@/config';
 import { User } from '@/modules/users/models/users.entity';
 
-export const AppDataSourceOptions: DataSourceOptions = {
+export const appDataSourceOptions: DataSourceOptions = {
   type: config.DB_TYPE,
   host: config.DB_HOST,
   port: config.DB_PORT,
@@ -20,4 +20,4 @@ export const AppDataSourceOptions: DataSourceOptions = {
   // namingStrategy: new SnakeNamingStrategy(), // Si besoin
 };
 
-export const AppDataSource = new DataSource(AppDataSourceOptions);
+export const appDataSource = new DataSource(appDataSourceOptions);

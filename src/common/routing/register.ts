@@ -26,35 +26,35 @@ import {
  */
 export function registerRoutes(
   router: Router,
-  ControllerClass: { new (...args: any[]): any },
+  controllerClass: { new (...args: any[]): any }, // Renamed ControllerClass to controllerClass
   options: { ignoreInternal?: boolean } = { ignoreInternal: false },
 ): void {
   let instance: any;
   try {
-    instance = new ControllerClass();
+    instance = new controllerClass(); // Updated reference
   } catch (error) {
-    logger.error(error, `Failed to instantiate controller ${ControllerClass.name}.`);
+    logger.error(error, `Failed to instantiate controller ${controllerClass.name}.`); // Updated reference
     return;
   }
 
-  const routes = globalMetadataStorage.getRoutesForTarget(ControllerClass);
+  const routes = globalMetadataStorage.getRoutesForTarget(controllerClass); // Updated reference
 
   if (!routes || routes.length === 0) {
-    logger.debug(`No routes defined with decorators found for controller ${ControllerClass.name}`);
+    logger.debug(`No routes defined with decorators found for controller ${controllerClass.name}`); // Updated reference
     return;
   }
 
   routes.forEach((routeMeta: RouteMetadataArgs) => {
     if (!routeMeta.method || !routeMeta.path || !routeMeta.handlerName) {
       logger.warn(
-        `  Skipping incomplete route metadata for ${ControllerClass.name}: ${JSON.stringify(routeMeta)}`,
+        `  Skipping incomplete route metadata for ${controllerClass.name}: ${JSON.stringify(routeMeta)}`, // Updated reference
       );
       return;
     }
 
     if (options.ignoreInternal && routeMeta.isInternal) {
       logger.info(
-        `  Skipping internal route: ${routeMeta.method.toUpperCase()} ${routeMeta.path} -> ${ControllerClass.name}.${String(routeMeta.handlerName)}`,
+        `  Skipping internal route: ${routeMeta.method.toUpperCase()} ${routeMeta.path} -> ${controllerClass.name}.${String(routeMeta.handlerName)}`, // Updated reference
       );
       return;
     }
@@ -63,7 +63,7 @@ export function registerRoutes(
 
     if (typeof handler !== 'function') {
       logger.error(
-        `  Handler ${String(routeMeta.handlerName)} for route ${routeMeta.method.toUpperCase()} ${routeMeta.path} in ${ControllerClass.name} is not a function. Skipping.`,
+        `  Handler ${String(routeMeta.handlerName)} for route ${routeMeta.method.toUpperCase()} ${routeMeta.path} in ${controllerClass.name} is not a function. Skipping.`, // Updated reference
       );
       return;
     }
@@ -82,11 +82,13 @@ export function registerRoutes(
       if (authRule.level !== undefined) {
         methodMiddlewares.push(requireLevel(authRule.level));
       } else if (authRule.feature && authRule.action) {
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises
         methodMiddlewares.push(requirePermission(authRule.feature, authRule.action));
       }
     }
     // Step 3: Zod Validation (if defined by @validate)
     if (routeMeta.validationSchema) {
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
       methodMiddlewares.push(validateRequest(routeMeta.validationSchema));
     }
 
@@ -104,26 +106,22 @@ export function registerRoutes(
       methodMiddlewares.push(parseSearch(routeMeta.searchableFields));
     }
 
-    // Step 5: Final Controller Handler (wrapped to catch async errors)
-    const finalHandlerWrapper: RequestHandler = async (
-      req: Request,
-      res: Response,
-      next: NextFunction,
-    ) => {
+    // Step 5: Final Controller Handler (wrapped to catch async errors and added directly)
+    const asyncWrappedHandler = async (req: Request, res: Response, next: NextFunction) => {
       try {
         await Promise.resolve(handler.call(instance, req, res, next));
       } catch (error) {
         next(error);
       }
     };
-    methodMiddlewares.push(finalHandlerWrapper);
 
     try {
-      router[routeMeta.method](routeMeta.path, ...methodMiddlewares);
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
+      router[routeMeta.method](routeMeta.path, ...methodMiddlewares, asyncWrappedHandler);
     } catch (error) {
       logger.error(
         error,
-        `  Failed to register route: ${routeMeta.method.toUpperCase()} ${routeMeta.path} for ${ControllerClass.name}.${String(routeMeta.handlerName)}`,
+        `  Failed to register route: ${routeMeta.method.toUpperCase()} ${routeMeta.path} for ${controllerClass.name}.${String(routeMeta.handlerName)}`, // Updated reference
       );
     }
   });

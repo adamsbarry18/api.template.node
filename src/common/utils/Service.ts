@@ -1,4 +1,4 @@
-export enum RESOURCES_KEYS {
+export enum ResourcesKeys {
   USER = 'user',
   NA = 'n/a',
 }
@@ -12,25 +12,25 @@ export function service(registry: { entity: string }): ClassDecorator {
 
 // Entity dependency declaration decorator
 export function dependency(
-  resourceKey: RESOURCES_KEYS,
-  dependencies: RESOURCES_KEYS[] = [],
+  resourceKey: ResourcesKeys,
+  dependencies: ResourcesKeys[] = [],
 ): ClassDecorator {
   if (!resourceKey) throw 'RessourceKey not defined';
-  if (!Object.values(RESOURCES_KEYS).includes(resourceKey))
+  if (!Object.values(ResourcesKeys).includes(resourceKey))
     throw `RessourceKey ${resourceKey} not found`;
   return function (target: any): void {
-    target.resourceKey = (): RESOURCES_KEYS => resourceKey;
-    target.dependencies = (): RESOURCES_KEYS[] => dependencies;
+    target.resourceKey = (): ResourcesKeys => resourceKey;
+    target.dependencies = (): ResourcesKeys[] => dependencies;
   };
 }
 
 export class DependentWrapper {
-  resourceKey: RESOURCES_KEYS;
+  resourceKey: ResourcesKeys;
   id: string;
   preventDeletion: boolean;
 
   constructor(id: string, preventDeletion: boolean) {
-    this.resourceKey = RESOURCES_KEYS.NA;
+    this.resourceKey = ResourcesKeys.NA;
     this.id = id;
     this.preventDeletion = preventDeletion;
   }
@@ -78,7 +78,7 @@ export const deepCopy = function (obj: object): object {
 export function isJson(str: string): boolean {
   try {
     JSON.parse(str);
-  } catch (e) {
+  } catch {
     return false;
   }
   return true;

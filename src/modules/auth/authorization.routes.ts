@@ -6,7 +6,7 @@ import { AuthorizationService } from '../auth/services/authorization.service';
 import { SecurityLevel } from '../users/models/users.entity';
 
 export default class AuthorizationRouter extends BaseRouter {
-  AuthorizationService = AuthorizationService.getInstance();
+  authorizationService = AuthorizationService.getInstance();
 
   /**
    * @openapi
@@ -24,7 +24,7 @@ export default class AuthorizationRouter extends BaseRouter {
   @Get('/authorization/features')
   @authorize({ level: SecurityLevel.ADMIN })
   async getAllFeatures(req: Request, res: Response, next: NextFunction): Promise<void> {
-    await this.pipe(res, req, next, () => this.AuthorizationService.getAllFeatures());
+    await this.pipe(res, req, next, () => this.authorizationService.getAllFeatures());
   }
 
   /**
@@ -43,7 +43,7 @@ export default class AuthorizationRouter extends BaseRouter {
   @Get('/authorization/levels')
   @authorize({ level: SecurityLevel.ADMIN })
   async getAuthorisationsByLevel(req: Request, res: Response, next: NextFunction): Promise<void> {
-    await this.pipe(res, req, next, () => this.AuthorizationService.listAuthorisationsByLevel());
+    await this.pipe(res, req, next, () => this.authorizationService.listAuthorisationsByLevel());
   }
 
   /**
@@ -71,7 +71,7 @@ export default class AuthorizationRouter extends BaseRouter {
   async getAuthorisationsForLevel(req: Request, res: Response, next: NextFunction): Promise<void> {
     const level = parseInt(req.params.level, 10);
     await this.pipe(res, req, next, () =>
-      this.AuthorizationService.listAuthorisationsFromLevel(level),
+      this.authorizationService.listAuthorisationsFromLevel(level),
     );
   }
 
@@ -101,7 +101,7 @@ export default class AuthorizationRouter extends BaseRouter {
   @authorize({ level: SecurityLevel.ADMIN })
   async getUserAuthorisation(req: Request, res: Response, next: NextFunction): Promise<void> {
     const userId = parseInt(req.params.userId, 10);
-    await this.pipe(res, req, next, () => this.AuthorizationService.getAuthorisation(userId));
+    await this.pipe(res, req, next, () => this.authorizationService.getAuthorisation(userId));
   }
 
   /**
@@ -146,7 +146,7 @@ export default class AuthorizationRouter extends BaseRouter {
     const { expire, level } = req.body;
 
     await this.pipe(res, req, next, () =>
-      this.AuthorizationService.createTemporaryAuthorization(userId, {
+      this.authorizationService.createTemporaryAuthorization(userId, {
         expire: expire ? new Date(expire) : undefined,
         level: level !== undefined ? parseInt(level, 10) : undefined,
       }),
@@ -190,7 +190,7 @@ export default class AuthorizationRouter extends BaseRouter {
     const { level, authorisationOverrides } = req.body;
 
     await this.pipe(res, req, next, () =>
-      this.AuthorizationService.updateAuthorization(userId, {
+      this.authorizationService.updateAuthorization(userId, {
         level: level !== undefined ? parseInt(level, 10) : undefined,
         authorisationOverrides,
       }),
@@ -222,7 +222,7 @@ export default class AuthorizationRouter extends BaseRouter {
   async deleteUserAuthorizations(req: Request, res: Response, next: NextFunction): Promise<void> {
     const userId = parseInt(req.params.userId, 10);
     await this.pipe(res, req, next, () =>
-      this.AuthorizationService.deleteAuthorisationsUser(userId),
+      this.authorizationService.deleteAuthorisationsUser(userId),
     );
   }
 }

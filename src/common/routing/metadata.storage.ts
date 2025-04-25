@@ -44,7 +44,7 @@ export class MetadataStorage {
    * If metadata for the same target/handler already exists, it merges the new arguments.
    * @param {RouteMetadataArgs} args Metadata arguments for the route.
    */
-  addRoute(args: RouteMetadataArgs) {
+  addRoute(args: RouteMetadataArgs): void {
     const existingIndex = this.routes.findIndex(
       (r) => r.target === args.target && r.handlerName === args.handlerName,
     );
@@ -69,7 +69,10 @@ export class MetadataStorage {
       if (!grouped.has(key)) {
         grouped.set(key, { ...meta });
       } else {
-        Object.assign(grouped.get(key)!, meta);
+        const existing = grouped.get(key);
+        if (existing) {
+          Object.assign(existing, meta);
+        }
       }
     }
     return Array.from(grouped.values());
@@ -86,7 +89,7 @@ export class MetadataStorage {
     target: Function,
     handlerName: string | symbol,
     update: Partial<RouteMetadataArgs>,
-  ) {
+  ): void {
     const route = this.routes.find((r) => r.target === target && r.handlerName === handlerName);
     if (route) {
       Object.assign(route, update);
@@ -100,7 +103,7 @@ export class MetadataStorage {
    * @param {Function} target The controller class constructor.
    * @param {RequestHandler} middleware The middleware function to add.
    */
-  addClassMiddleware(target: Function, middleware: RequestHandler) {
+  addClassMiddleware(target: Function, middleware: RequestHandler): void {
     let classMeta = this.classMiddlewares.find((cm) => cm.target === target);
     if (!classMeta) {
       classMeta = { target, middlewares: [] };

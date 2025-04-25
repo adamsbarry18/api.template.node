@@ -210,7 +210,7 @@ export class AuthorizationService {
   }
 
   private async getEffectivePermissions(userId: number): Promise<DecodedAuthorisations | null> {
-    if (!redisClient) {
+    if (!redisClient?.isReady) {
       logger.warn('Redis unavailable for retrieving authorizations. Calculating directly.');
       return this.calculateEffectivePermissions(userId);
     }
@@ -311,7 +311,11 @@ export class AuthorizationService {
 
       let finalMask: number;
       if (overrides.has(featureId)) {
-        finalMask = overrides.get(featureId)!;
+        const foundLevel = overrides.get(featureId);
+        finalMask =
+          foundLevel !== undefined
+            ? foundLevel
+            : this.calculateDefaultMaskForLevel(featureId, baseLevel);
         logger.debug(`User ${userId}, Feature ${featureName}: Using override mask ${finalMask}`);
       } else {
         finalMask = this.calculateDefaultMaskForLevel(featureId, baseLevel);
@@ -363,7 +367,7 @@ export class AuthorizationService {
     const parts = overrideString.split('.');
     for (const part of parts) {
       try {
-        const numAuth = parseInt(part, 10);
+        const numAuth = parseInt(part, 10) ?? 0;
         if (isNaN(numAuth) || numAuth < 0) {
           logger.warn(
             `Invalid non-numeric or negative part found in authorisationOverrides: '${part}'. Skipping.`,

@@ -3,8 +3,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 // Ajoute ces deux lignes pour obtenir le répertoire courant du fichier
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const filename = fileURLToPath(import.meta.url);
+const dirname = path.dirname(filename);
 
 type EmailTemplate = { subject: string; html: string };
 type EmailTemplates = Record<string, EmailTemplate>;
@@ -13,7 +13,7 @@ const cache: Record<string, EmailTemplates> = {};
 
 export function loadEmailTemplates(lang: string): EmailTemplates {
   if (cache[lang]) return cache[lang];
-  const filePath = path.join(__dirname, `${lang}.json`);
+  const filePath = path.join(dirname, `${lang}.json`);
   if (!fs.existsSync(filePath)) throw new Error(`Email template file not found: ${filePath}`);
   const content = fs.readFileSync(filePath, 'utf-8');
   cache[lang] = JSON.parse(content);

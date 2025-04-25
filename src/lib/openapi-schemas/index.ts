@@ -1,14 +1,14 @@
-import { AuthorizationSchemas } from './users/authorization.schemas';
-import { AuthSchemas } from './users/login.schemas';
-import { UserSchemas } from './users/user.schemas';
+import { authorizationSchemas } from './users/authorization.schemas';
+import { authSchemas } from './users/login.schemas';
+import { userSchemas } from './users/user.schemas';
 
 export const schemas = {
-  ...UserSchemas,
-  ...AuthSchemas,
-  ...AuthorizationSchemas,
+  ...userSchemas,
+  ...authSchemas,
+  ...authorizationSchemas,
 };
 
-export const getOpenAPIComponents = () => ({
+export const getOpenAPIComponents = (): { components: { schemas: typeof schemas } } => ({
   components: {
     schemas,
   },

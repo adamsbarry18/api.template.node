@@ -55,18 +55,16 @@ async function initializeApiRouter(): Promise<Router> {
       const importedModule = await import(fileURL);
 
       // Prefer default export, otherwise take the first named export
-      const ControllerClass =
+      const controllerClass =
         importedModule.default || importedModule[Object.keys(importedModule)[0]];
 
-      if (typeof ControllerClass === 'function' && ControllerClass.prototype) {
-        // Assume the class has a name (for logging)
-        const controllerName = ControllerClass.name || '[Anonymous Controller]';
+      if (typeof controllerClass === 'function' && controllerClass.prototype) {
+        const controllerName = controllerClass.name || '[Anonymous Controller]';
         logger.info(`  Registering routes from ${relativePath} using controller ${controllerName}`);
-        // registerRoutes is synchronous in its current design
-        registerRoutes(apiRouter, ControllerClass);
+        registerRoutes(apiRouter, controllerClass);
       } else {
         logger.warn(
-          `  Skipping file ${relativePath}: No valid controller class found as default export or first named export. Found type: ${typeof ControllerClass}`,
+          `  Skipping file ${relativePath}: No valid controller class found as default export or first named export. Found type: ${typeof controllerClass}`,
         );
       }
     } catch (error) {

@@ -47,8 +47,8 @@ export class UsersService {
   mapToApiResponse(user: User | null): UserApiResponse | null {
     if (!user) return null;
     const apiUser = user.toApi() as UserApiResponse;
-    if (user.createdAt) apiUser.created_time = user.createdAt;
-    if (user.updatedAt) apiUser.updated_time = user.updatedAt;
+    if (user.createdAt) apiUser.createdTime = user.createdAt;
+    if (user.updatedAt) apiUser.updatedTime = user.updatedAt;
     return apiUser;
   }
 
@@ -73,7 +73,12 @@ export class UsersService {
     try {
       const user = await this.userRepository.findById(id);
       if (!user) throw new NotFoundError(`User with id ${id} not found.`);
-      return this.mapToApiResponse(user)!;
+      const apiResponse = this.mapToApiResponse(user);
+      if (!apiResponse) {
+        // This should theoretically not happen if findById found a user
+        throw new ServerError(`Failed to map found user with id ${id} to API response.`);
+      }
+      return apiResponse;
     } catch (error) {
       if (error instanceof NotFoundError) {
         throw error;
@@ -91,7 +96,12 @@ export class UsersService {
     try {
       const user = await this.userRepository.findByEmail(email);
       if (!user) throw new NotFoundError(`User with email ${email} not found.`);
-      return this.mapToApiResponse(user)!;
+      const apiResponse = this.mapToApiResponse(user);
+      if (!apiResponse) {
+        // This should theoretically not happen if findByEmail found a user
+        throw new ServerError(`Failed to map found user with email ${email} to API response.`);
+      }
+      return apiResponse;
     } catch (error) {
       throw new ServerError(`Error finding user with email ${email} ${error}`);
     }
@@ -123,7 +133,8 @@ export class UsersService {
         where.internal = false;
       }
       const { users } = await this.userRepository.findAll({ where });
-      return users.map((user) => this.mapToApiResponse(user)!);
+      // Map and filter out any potential null results before returning
+      return users.map((user) => this.mapToApiResponse(user)).filter(Boolean) as UserApiResponse[];
     } catch (error) {
       throw new ServerError(`Error finding all users ${error}`);
     }
@@ -198,7 +209,14 @@ export class UsersService {
       }
       const savedUser = await this.userRepository.save(userEntity);
       logger.info(`User ${savedUser.id} ${deletedUser ? 'reactivated' : 'created'} successfully.`);
-      return this.mapToApiResponse(savedUser)!;
+      const apiResponse = this.mapToApiResponse(savedUser);
+      if (!apiResponse) {
+        // This should theoretically not happen after a successful save
+        throw new ServerError(
+          `Failed to map newly created/reactivated user ${savedUser.id} to API response.`,
+        );
+      }
+      return apiResponse;
     } catch (error: any) {
       logger.error({
         message: `Original error caught during user creation/reactivation for ${email}`,
@@ -284,7 +302,12 @@ export class UsersService {
         await this.passwordService.sendPasswordConfirmationEmail(updatedUser, emailLanguage);
       }
       logger.info(`User ${id} updated successfully.`);
-      return this.mapToApiResponse(updatedUser)!;
+      const apiResponse = this.mapToApiResponse(updatedUser);
+      if (!apiResponse) {
+        // This should theoretically not happen after a successful update and re-fetch
+        throw new ServerError(`Failed to map updated user ${id} to API response.`);
+      }
+      return apiResponse;
     } catch (error: any) {
       logger.error(error, `Error updating user ${id}`);
       if (
@@ -315,7 +338,14 @@ export class UsersService {
       if (!updatedUser) {
         throw new ServerError('Failed to re-fetch user after preference update.');
       }
-      return this.mapToApiResponse(updatedUser)!;
+      const apiResponse = this.mapToApiResponse(updatedUser);
+      if (!apiResponse) {
+        // This should theoretically not happen after a successful preference update and re-fetch
+        throw new ServerError(
+          `Failed to map user ${userId} after preference update to API response.`,
+        );
+      }
+      return apiResponse;
     } catch (error) {
       throw new ServerError(`Error updating preferences for user ${userId} ${error}`);
     }

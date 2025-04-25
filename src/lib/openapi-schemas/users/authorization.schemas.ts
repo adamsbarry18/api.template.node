@@ -1,5 +1,5 @@
 // src/lib/openapi-schemas/authorization.schemas.ts
-export const AuthorizationSchemas = {
+export const authorizationSchemas = {
   FeaturesResponse: {
     type: 'object',
     additionalProperties: {

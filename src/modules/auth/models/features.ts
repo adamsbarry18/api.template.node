@@ -165,7 +165,8 @@ function calculateCombinedMask(flagName: string, flags: Record<string, RawFlagCo
   const stack: string[] = [flagName];
   let mask = 0;
   while (stack.length > 0) {
-    const current = stack.pop()!;
+    const current = stack.pop();
+    if (current === undefined) continue;
     if (!visited.has(current)) {
       visited.add(current);
       const flag = flags[current];

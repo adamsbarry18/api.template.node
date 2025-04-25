@@ -4,9 +4,7 @@ import {
   Get,
   Post,
   Put,
-  Patch,
   Delete,
-  validate,
   authorize,
   paginate,
   sortable,
@@ -19,7 +17,7 @@ import { SecurityLevel } from './models/users.entity';
 import { UsersService } from './services/users.services';
 
 export default class UserRouter extends BaseRouter {
-  UsersService = UsersService.getInstance();
+  usersService = UsersService.getInstance();
 
   /**
    * @openapi
@@ -52,7 +50,7 @@ export default class UserRouter extends BaseRouter {
   @filterable(['level', 'internal', 'email'])
   @searchable(['email', 'name', 'surname'])
   async getAllUsers(req: Request, res: Response, next: NextFunction): Promise<void> {
-    await this.pipe(res, req, next, () => this.UsersService.findAll({ requestingUser: req.user }));
+    await this.pipe(res, req, next, () => this.usersService.findAll({ requestingUser: req.user }));
   }
 
   /**
@@ -77,7 +75,7 @@ export default class UserRouter extends BaseRouter {
     if (!userId) {
       return next(new UnauthorizedError('User ID not found in token payload.'));
     }
-    await this.pipe(res, req, next, () => this.UsersService.findById(userId));
+    await this.pipe(res, req, next, () => this.usersService.findById(userId));
   }
 
   /**
@@ -107,7 +105,7 @@ export default class UserRouter extends BaseRouter {
   async getUserById(req: Request, res: Response, next: NextFunction): Promise<void> {
     const userId = parseInt(req.params.id, 10);
     await this.pipe(res, req, next, () =>
-      this.UsersService.findById(userId, { requestingUser: req.user }),
+      this.usersService.findById(userId, { requestingUser: req.user }),
     );
   }
 
@@ -140,7 +138,7 @@ export default class UserRouter extends BaseRouter {
       res,
       req,
       next,
-      () => this.UsersService.create(userInput, { requestingUser: req.user }),
+      () => this.usersService.create(userInput, { requestingUser: req.user }),
       201,
     );
   }
@@ -185,7 +183,7 @@ export default class UserRouter extends BaseRouter {
       return next(new ForbiddenError('You can only update your own account'));
     }
     await this.pipe(res, req, next, () =>
-      this.UsersService.update(userIdToUpdate, updateData, { requestingUser: req.user }),
+      this.usersService.update(userIdToUpdate, updateData, { requestingUser: req.user }),
     );
   }
 
@@ -226,7 +224,7 @@ export default class UserRouter extends BaseRouter {
       req,
       next,
       async () => {
-        await this.UsersService.delete(userIdToDelete, { requestingUser: req.user });
+        await this.usersService.delete(userIdToDelete, { requestingUser: req.user });
         return 'Successfull deletion';
       },
       200,
@@ -273,7 +271,7 @@ export default class UserRouter extends BaseRouter {
       return next(new ForbiddenError('You can only update your own preferences'));
     }
 
-    await this.pipe(res, req, next, () => this.UsersService.updatePreferences(userId, preferences));
+    await this.pipe(res, req, next, () => this.usersService.updatePreferences(userId, preferences));
   }
 
   /**
@@ -309,6 +307,6 @@ export default class UserRouter extends BaseRouter {
       return next(new ForbiddenError('You can only reset your own preferences'));
     }
 
-    await this.pipe(res, req, next, () => this.UsersService.resetPreferences(userId));
+    await this.pipe(res, req, next, () => this.usersService.resetPreferences(userId));
   }
 }

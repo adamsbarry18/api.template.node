@@ -3,7 +3,6 @@ import os from 'os';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
-import express, { type Express, type NextFunction } from 'express';
 import helmet from 'helmet';
 import passport from 'passport';
 import swaggerUi from 'swagger-ui-express';
@@ -17,11 +16,12 @@ import logger from '@/lib/logger';
 import swaggerSpec from '@/lib/openapi';
 
 import { passportAuthenticationMiddleware } from './common/middleware/authentication';
-import { type Request, type Response } from './config/http';
+import type { NextFunction, Request, Response } from './config/http';
+import express from 'express';
 
 const HOSTNAME = os.hostname();
 
-const app: Express = express();
+const app = express();
 
 // --- Essential Middleware Configuration ---
 app.disable('x-powered-by');
@@ -161,7 +161,10 @@ app.get('/', (req: Request, res: Response) => {
     });
     app.use(errorHandler);
   }
-})();
+})().catch((error) => {
+  logger.fatal({ err: error }, '❌ Unhandled error during async app initialization.');
+  process.exit(1);
+});
 
 // Export the configured app instance.
 // Note: The mounting of API routes and final error handlers is asynchronous.

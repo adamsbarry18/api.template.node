@@ -108,19 +108,22 @@ export const parseFiltering =
 
     if (req.query.filter && typeof req.query.filter === 'object') {
       logger.debug({ filtersQuery: req.query.filter }, 'Parsing filters...');
-      for (const field in req.query.filter) {
+      Object.entries(req.query.filter).forEach(([field, value]) => {
         if (Array.isArray(allowedFields) && !allowedFields.includes(field)) {
           logger.warn(`Filtering ignored for unauthorized field: ${field}`);
-          continue;
+          return;
         }
 
-        if (allowedFields === false) continue;
-        req.filters.push({
-          field,
-          operator: 'eq',
-          value: (req.query.filter as import('qs').ParsedQs)[field],
-        });
-      }
+        if (allowedFields === false) return;
+
+        if (req.filters) {
+          req.filters.push({
+            field,
+            operator: 'eq',
+            value,
+          });
+        }
+      });
     }
 
     next();

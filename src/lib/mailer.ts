@@ -21,7 +21,7 @@ if (config.MAIL_HOST && config.MAIL_PORT && config.MAIL_USER && config.MAIL_PASS
       // },
     });
 
-    transporter.verify((error, success) => {
+    transporter.verify((error) => {
       if (error) {
         logger.error(error, 'Mailer verification failed during verify:', error);
         transporter = null;
@@ -70,5 +70,5 @@ export const sendMail = async (options: MailOptions): Promise<void> => {
 
 export default {
   sendMail,
-  isReady: () => transporter !== null,
+  isReady: (): boolean => transporter !== null,
 };

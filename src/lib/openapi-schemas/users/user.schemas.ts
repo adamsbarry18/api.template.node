@@ -1,4 +1,4 @@
-export const UserSchemas = {
+export const userSchemas = {
   UserInput: {
     type: 'object',
     required: ['email', 'password', 'name', 'level'],

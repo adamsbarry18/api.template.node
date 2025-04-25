@@ -8,8 +8,8 @@ import { PasswordService } from './services/password.services';
 import { SecurityLevel } from '../users/models/users.entity';
 
 export default class LoginRouter extends BaseRouter {
-  LoginService = LoginService.getInstance();
-  PasswordService = PasswordService.getInstance();
+  loginService = LoginService.getInstance();
+  passwordService = PasswordService.getInstance();
 
   /**
    * @openapi
@@ -41,7 +41,7 @@ export default class LoginRouter extends BaseRouter {
   @Post('/auth/login')
   async login(req: Request, res: Response, next: NextFunction): Promise<void> {
     const { email, password } = req.body;
-    await this.pipe(res, req, next, () => this.LoginService.login(email, password));
+    await this.pipe(res, req, next, () => this.loginService.login(email, password));
   }
 
   /**
@@ -70,7 +70,7 @@ export default class LoginRouter extends BaseRouter {
       req,
       next,
       async () => {
-        this.LoginService.logout(token);
+        await this.loginService.logout(token);
         return { message: 'Logout successful' };
       },
       200,
@@ -116,7 +116,7 @@ export default class LoginRouter extends BaseRouter {
     }
 
     await this.pipe(res, req, next, async () => {
-      await this.PasswordService.sendPasswordResetEmail(email, referer, language);
+      await this.passwordService.sendPasswordResetEmail(email, referer, language);
       return {
         message: 'If your email exists in our system, you will receive reset instructions shortly',
       };
@@ -158,7 +158,7 @@ export default class LoginRouter extends BaseRouter {
     if (!code || code.length != 32) return res.jsend.fail('No confirm code');
 
     await this.pipe(res, req, next, async () => {
-      this.PasswordService.resetPasswordWithCode(code, password);
+      await this.passwordService.resetPasswordWithCode(code, password);
       return { message: 'Password reset successful' };
     });
   }
@@ -190,7 +190,7 @@ export default class LoginRouter extends BaseRouter {
     const { code } = req.params;
     if (!code || code.length != 32) return res.jsend.fail('No confirm code');
     await this.pipe(res, req, next, async () => {
-      this.PasswordService.confirmPasswordChange(code);
+      await this.passwordService.confirmPasswordChange(code);
       return { message: 'Password confirmed successfully' };
     });
   }
@@ -232,22 +232,18 @@ export default class LoginRouter extends BaseRouter {
     if (!newPassword) return res.jsend.fail('Parameter newPassword not found');
 
     try {
-      // Tente de login, si le mot de passe est expiré, une erreur sera levée
-      await this.LoginService.login(email, password);
-      // Si pas d'erreur, le mot de passe n'est pas expiré, donc refuse la demande
+      await this.loginService.login(email, password);
       return res.jsend.fail('Password is not expired');
     } catch (err: any) {
       if (err.code === 'ERR_PWD_EXPIRED') {
-        // Mot de passe expiré, on lance la procédure de changement
         return this.pipe(res, req, next, async () =>
-          this.PasswordService.updateExpiredPassword({
+          this.passwordService.updateExpiredPassword({
             email: email,
             password: newPassword,
             referer: referer,
           }),
         );
       }
-      // Autre erreur d'authentification
       return res.status(401).jsend.fail('Authentification error');
     }
   }
@@ -275,6 +271,6 @@ export default class LoginRouter extends BaseRouter {
       return next(new UnauthorizedError('User ID not found in token payload'));
     }
 
-    await this.pipe(res, req, next, () => this.LoginService.generateTokenForUser(userId), 200);
+    await this.pipe(res, req, next, () => this.loginService.generateTokenForUser(userId), 200);
   }
 }

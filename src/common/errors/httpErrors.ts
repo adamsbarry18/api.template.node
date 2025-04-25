@@ -15,7 +15,7 @@ if (!('toJSON' in Error.prototype)) {
   });
 }
 
-export enum ERROR_STATUS {
+export enum ErrorStatus {
   ERR_VALIDATION = 400,
   ERR_BAD_REQUEST = 400,
   ERR_PWD_IDENTICAL = 400,
@@ -30,7 +30,7 @@ export enum ERROR_STATUS {
   ERR_SERVICE_UNAVAILABLE = 503,
 }
 
-type ErrorCode = keyof typeof ERROR_STATUS;
+type ErrorCode = keyof typeof ErrorStatus;
 
 export class BaseError extends Error {
   code: ErrorCode;
@@ -40,7 +40,7 @@ export class BaseError extends Error {
 
   /**
    * Create a standard API error
-   * @param code ERROR_STATUS code
+   * @param code ErrorStatus code
    * @param message Error message
    * @param data Special data to display
    */
@@ -52,7 +52,7 @@ export class BaseError extends Error {
     super(message);
     this.code = code;
     this.message = message;
-    this.status = ERROR_STATUS.hasOwnProperty(code) ? ERROR_STATUS[code] : 500;
+    this.status = ErrorStatus.hasOwnProperty(code) ? ErrorStatus[code] : 500;
     this.data = data;
     this.name = this.constructor.name;
     delete this.stack; // Avoid leaking stack for those errors
@@ -109,19 +109,19 @@ export class ServiceUnavailableError extends BaseError {
   }
 }
 
-export enum AUTHENTICATE_ERRORS {
+export enum PasswordError {
   PASSWORD_VALIDATING = 'PASSWORD VALIDATING',
   PASSWORD_EXPIRED = 'PASSWORD EXPIRED',
   PASSWORD_IDENTICAL = 'PASSWORD_IDENTICAL',
 }
 
 export class AuthenticateError extends BaseError {
-  constructor(message: AUTHENTICATE_ERRORS | string) {
-    if (message === AUTHENTICATE_ERRORS.PASSWORD_VALIDATING) {
+  constructor(message: PasswordError | string) {
+    if (message === PasswordError.PASSWORD_VALIDATING) {
       super('ERR_PWD_VALIDATING', message);
-    } else if (message === AUTHENTICATE_ERRORS.PASSWORD_EXPIRED) {
+    } else if (message === PasswordError.PASSWORD_EXPIRED) {
       super('ERR_PWD_EXPIRED', message);
-    } else if (message === AUTHENTICATE_ERRORS.PASSWORD_IDENTICAL) {
+    } else if (message === PasswordError.PASSWORD_IDENTICAL) {
       super('ERR_PWD_IDENTICAL', message);
     } else {
       super('ERR_OTHER', message);
@@ -150,7 +150,7 @@ export class ParameterError extends Error {
     this.name = this.constructor.name;
   }
 }
-
+// eslint-disable-next-line @typescript-eslint/naming-convention
 export const Errors = {
   BaseError,
   ServerError,

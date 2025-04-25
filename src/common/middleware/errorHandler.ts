@@ -16,7 +16,8 @@ import {
   ServiceUnavailableError,
 } from '../errors/httpErrors';
 
-export const errorHandler = (err: Error, req: Request, res: Response, next: NextFunction): void => {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export const errorHandler = (err: Error, req: Request, res: Response, _next: NextFunction): void => {
   let error: BaseError;
 
   logger.error(

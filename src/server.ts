@@ -3,31 +3,41 @@ import os from 'os';
 
 import app from './app';
 import config from './config';
-import { AppDataSource } from './database/data-source';
+import { appDataSource } from './database/data-source';
 import logger from './lib/logger';
 import { initializeRedis, getRedisClient } from './lib/redis';
 
+/** The hostname of the machine. */
 const hostname = os.hostname();
+/** Delay in milliseconds before closing connections during shutdown, allowing readiness probes to fail. */
 const READINESS_PROBE_DELAY_MS = 15 * 1000;
+/** Timeout in milliseconds for the graceful shutdown process before forcing exit. */
 const SHUTDOWN_TIMEOUT_MS = 10 * 1000;
 
+/** The HTTP server instance. */
 let server: http.Server;
+/** Flag indicating if the shutdown process has started. */
 let isShuttingDown = false;
 
-// --- Gestion Globale des Erreurs Processus Node ---
+/**
+ * Global handler for unhandled promise rejections.
+ * Logs the error and initiates a graceful shutdown.
+ */
 process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
   logger.fatal({ promise, reason }, '💥 Unhandled Rejection at Promise. Forcing shutdown...');
-  // Tenter un arrêt propre, mais forcer après un délai
-  gracefulShutdown('unhandledRejection').catch(() => process.exit(1)); // Ne pas laisser une erreur ici empêcher la sortie
+  gracefulShutdown('unhandledRejection').catch(() => process.exit(1));
   setTimeout(() => {
     logger.fatal('Graceful shutdown timed out after unhandledRejection. Forcing exit.');
     process.exit(1);
   }, SHUTDOWN_TIMEOUT_MS);
 });
 
+/**
+ * Global handler for uncaught exceptions.
+ * Logs the error and initiates a graceful shutdown.
+ */
 process.on('uncaughtException', (error: Error) => {
   logger.fatal(error, '💥 Uncaught Exception thrown. Forcing shutdown...');
-  // Tenter un arrêt propre, mais forcer après un délai (l'état peut être corrompu)
   gracefulShutdown('uncaughtException').catch(() => process.exit(1));
   setTimeout(() => {
     logger.fatal('Graceful shutdown timed out after uncaughtException. Forcing exit.');
@@ -36,21 +46,21 @@ process.on('uncaughtException', (error: Error) => {
 });
 
 /**
- * Initialise les connexions externes (BDD, Redis, etc.).
- * @throws {Error} Si une initialisation critique échoue.
+ * Initializes external connections (Database, Redis, etc.).
+ * @throws {Error} If a critical initialization fails (e.g., database connection).
  */
 async function initializeExternalConnections(): Promise<void> {
   logger.info('Initializing external connections...');
   try {
-    // 1. TypeORM (Critique)
-    if (!AppDataSource.isInitialized) {
-      await AppDataSource.initialize();
+    // Initialize TypeORM (critical)
+    if (!appDataSource.isInitialized) {
+      await appDataSource.initialize();
       logger.info('✅ TypeORM DataSource initialized successfully.');
     } else {
       logger.info('ℹ️ TypeORM DataSource was already initialized.');
     }
 
-    // 2. Redis (Non critique pour le démarrage de base, mais log l'erreur)
+    // Initialize Redis (non-critical for basic startup, log errors)
     try {
       await initializeRedis();
       if (getRedisClient()?.isOpen) {
@@ -68,13 +78,14 @@ async function initializeExternalConnections(): Promise<void> {
       { err: error },
       '❌ Critical error during external connections initialization. Exiting.',
     );
-    throw error;
+    throw error; // Re-throw critical errors to stop the startup process
   }
 }
 
 /**
- * Gère l'arrêt propre de l'application.
- * @param signal Le signal reçu ou la raison de l'arrêt.
+ * Handles the graceful shutdown of the application.
+ * Closes the HTTP server and external connections.
+ * @param {NodeJS.Signals | string} signal - The signal received or the reason for shutdown.
  */
 async function gracefulShutdown(signal: NodeJS.Signals | string): Promise<void> {
   if (isShuttingDown) {
@@ -83,15 +94,13 @@ async function gracefulShutdown(signal: NodeJS.Signals | string): Promise<void> 
   }
   isShuttingDown = true;
   logger.warn(`Received ${signal}. Starting graceful shutdown at ${new Date().toISOString()}...`);
-  // setStatus('stopping'); // Si vous avez un système de statut
 
-  // 1. Arrêter le serveur HTTP d'accepter de nouvelles connexions
+  // 1. Stop the HTTP server from accepting new connections
   if (server) {
     logger.info('Closing HTTP server...');
     server.close((err?: Error) => {
       if (err) {
         logger.error({ err }, 'Error closing HTTP server.');
-        // Continuer quand même l'arrêt des connexions
       } else {
         logger.info('✅ HTTP server closed.');
       }
@@ -100,20 +109,19 @@ async function gracefulShutdown(signal: NodeJS.Signals | string): Promise<void> 
     logger.info('HTTP server was not running.');
   }
 
-  // 2. Attendre un délai (pour les sondes K8s readiness) AVANT de fermer les connexions BDD/Redis
+  // 2. Wait for a delay (e.g., for K8s readiness probes) BEFORE closing DB/Redis connections
   logger.info(`Waiting ${READINESS_PROBE_DELAY_MS / 1000} seconds before closing connections...`);
   await new Promise((resolve) => setTimeout(resolve, READINESS_PROBE_DELAY_MS));
 
-  // 3. Fermer les connexions externes
+  // 3. Close external connections
   logger.info('Closing external connections...');
   let exitCode = 0;
-
   const closePromises = [];
 
-  // TypeORM
-  if (AppDataSource.isInitialized) {
+  // Close TypeORM connection
+  if (appDataSource.isInitialized) {
     closePromises.push(
-      AppDataSource.destroy()
+      appDataSource.destroy()
         .then(() => logger.info('  -> TypeORM connection closed.'))
         .catch((dbError: unknown) => {
           logger.error({ err: dbError }, 'Error closing TypeORM connection.');
@@ -122,23 +130,23 @@ async function gracefulShutdown(signal: NodeJS.Signals | string): Promise<void> 
     );
   }
 
-  // Redis
+  // Close Redis connection
   const redisClientInstance = getRedisClient();
   if (redisClientInstance) {
     closePromises.push(
       redisClientInstance
-        .quit() // Appeler .quit() sur l'instance
+        .quit()
         .then(() => logger.info('  -> Redis connection closed.'))
         .catch((redisError: unknown) => {
           logger.error({ err: redisError }, 'Error closing Redis connection.');
-          exitCode = 1; // Marquer comme erreur, mais ne pas empêcher la sortie
+          exitCode = 1;
         }),
     );
   } else {
     logger.info('  -> Redis client was not initialized or already closed.');
   }
 
-  // Attendre la fin de toutes les fermetures
+  // Wait for all close operations to settle
   await Promise.allSettled(closePromises);
 
   logger.info(`🏁 Graceful shutdown finished. Exiting with code ${exitCode}.`);
@@ -146,7 +154,8 @@ async function gracefulShutdown(signal: NodeJS.Signals | string): Promise<void> 
 }
 
 /**
- * Fonction principale asynchrone pour démarrer le serveur.
+ * Main asynchronous function to start the server.
+ * Initializes connections, creates the HTTP server, and starts listening.
  */
 async function startServer(): Promise<void> {
   logger.info('=======================================================');
@@ -155,11 +164,14 @@ async function startServer(): Promise<void> {
   );
   logger.info('=======================================================');
 
-  // Initialiser les connexions externes AVANT de démarrer le serveur HTTP
+  // Initialize external connections BEFORE starting the HTTP server
   await initializeExternalConnections();
 
+  // Create HTTP server
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises
   server = http.createServer(app);
 
+  // Handle server errors (e.g., port in use)
   server.on('error', (error: NodeJS.ErrnoException) => {
     logger.fatal({ err: error }, '❌ HTTP server error');
     if (error.syscall !== 'listen') {
@@ -176,9 +188,10 @@ async function startServer(): Promise<void> {
       default:
         logger.fatal(`Unhandled listen error: ${error.code}. Exiting.`);
     }
-    process.exit(1);
+    process.exit(1); // Exit immediately for listen errors
   });
 
+  // Start listening for connections
   server.listen(config.PORT, config.HOST, () => {
     const redisClient = getRedisClient();
     const apiUrl = config.API_URL || `http://${config.HOST}:${config.PORT}`;
@@ -188,7 +201,7 @@ async function startServer(): Promise<void> {
     logger.info(`✅ API Docs available at ${apiUrl}/api-docs`);
     logger.info(`   Environment: ${config.NODE_ENV}`);
     logger.info(
-      `   Database: ${config.DB_TYPE} on ${config.DB_HOST}:${config.DB_PORT}:${config.DB_NAME} (${AppDataSource.isInitialized ? 'Connected' : 'Disconnected'})`,
+      `   Database: ${config.DB_TYPE} on ${config.DB_HOST}:${config.DB_PORT}:${config.DB_NAME} (${appDataSource.isInitialized ? 'Connected' : 'Disconnected'})`,
     );
     logger.info(
       `   Redis: ${redisClient?.isOpen ? 'Connected' : 'Disconnected'} to ${config.REDIS_HOST}:${config.REDIS_PORT}`,
@@ -196,14 +209,16 @@ async function startServer(): Promise<void> {
     logger.info('=======================================================');
   });
 
-  // Attacher les handlers de signaux pour le graceful shutdown
+  // Attach signal handlers for graceful shutdown
   const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM', 'SIGQUIT'];
   signals.forEach((signal) => {
-    process.on(signal, () => gracefulShutdown(signal));
+    process.on(signal, () => {
+      void gracefulShutdown(signal);
+    });
   });
 }
 
-// --- Démarrage de l'Application ---
+// --- Application Startup ---
 startServer().catch((error: unknown) => {
   logger.fatal({ err: error }, '💥 Critical error during server startup sequence. Exiting.');
   process.exit(1);

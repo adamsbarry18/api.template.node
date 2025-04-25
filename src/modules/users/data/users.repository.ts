@@ -8,7 +8,7 @@ import {
 } from 'typeorm';
 
 import { ServerError } from '@/common/errors/httpErrors';
-import { AppDataSource } from '@/database/data-source';
+import { appDataSource } from '@/database/data-source';
 
 import { type PasswordStatus, SecurityLevel, User } from '../models/users.entity';
 
@@ -51,7 +51,7 @@ const USER_WITH_PASSWORD_FIELDS: (keyof User)[] = [
 export class UserRepository {
   private readonly repository: Repository<User>;
 
-  constructor(dataSource: DataSource = AppDataSource) {
+  constructor(dataSource: DataSource = appDataSource) {
     this.repository = dataSource.getRepository(User);
   }
 

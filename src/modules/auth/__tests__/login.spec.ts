@@ -2,7 +2,7 @@ import request from 'supertest';
 import { describe, it, expect, beforeAll } from 'vitest';
 
 import app from '@/app';
-import { AppDataSource } from '@/database/data-source';
+import { appDataSource } from '@/database/data-source';
 import { redisClient } from '@/lib/redis';
 import { User } from '@/modules/users/models/users.entity';
 
@@ -29,7 +29,7 @@ describe('Auth API', () => {
 
     // Reset test user password to initial state
     const initialPassword = 'Password123!';
-    const userRepo = AppDataSource.getRepository(User);
+    const userRepo = appDataSource.getRepository(User);
     const hashedPassword = await passwordService.hashPassword(initialPassword);
     await userRepo.update({ email: testEmail }, { password: hashedPassword });
     currentPassword = initialPassword;
@@ -90,7 +90,11 @@ describe('Auth API', () => {
       if (redisClient) {
         const keys = await redisClient.keys('api:users:reset-password:*');
         expect(keys.length).toBeGreaterThan(0);
-        resetCode = keys[0].split(':').pop()!;
+        const extractedCode = keys[0].split(':').pop();
+        if (!extractedCode) {
+          throw new Error(`Could not extract reset code from Redis key: ${keys[0]}`);
+        }
+        resetCode = extractedCode;
         const userId = await redisClient.get(keys[0]);
         expect(userId).toBeTruthy();
       }
@@ -131,7 +135,7 @@ describe('Auth API', () => {
 
     it('should update expired password and send confirmation email (simulate)', async () => {
       // Simule un mot de passe expiré pour le test user
-      const userRepo = AppDataSource.getRepository('User');
+      const userRepo = appDataSource.getRepository('User');
       await userRepo.update(
         { email: testEmail },
         { passwordStatus: 'EXPIRED', passwordUpdatedAt: new Date('2000-01-01') },
@@ -148,7 +152,11 @@ describe('Auth API', () => {
       if (redisClient) {
         const keys = await redisClient.keys('api:users:confirm-password:*');
         expect(keys.length).toBeGreaterThan(0);
-        confirmCode = keys[0].split(':').pop()!;
+        const extractedConfirmCode = keys[0].split(':').pop();
+        if (!extractedConfirmCode) {
+          throw new Error(`Could not extract confirmation code from Redis key: ${keys[0]}`);
+        }
+        confirmCode = extractedConfirmCode;
         const userId = await redisClient.get(keys[0]);
         expect(userId).toBeTruthy();
       }

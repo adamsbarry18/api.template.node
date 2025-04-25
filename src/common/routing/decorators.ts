@@ -23,10 +23,15 @@ export function route(method: HttpMethod, path: string): MethodDecorator {
 }
 
 // Shortcuts for common HTTP methods
+// eslint-disable-next-line @typescript-eslint/naming-convention, @typescript-eslint/explicit-module-boundary-types
 export const Get = (path: string) => route('get', path);
+// eslint-disable-next-line @typescript-eslint/naming-convention, @typescript-eslint/explicit-module-boundary-types
 export const Post = (path: string) => route('post', path);
+// eslint-disable-next-line @typescript-eslint/naming-convention, @typescript-eslint/explicit-module-boundary-types
 export const Put = (path: string) => route('put', path);
+// eslint-disable-next-line @typescript-eslint/naming-convention, @typescript-eslint/explicit-module-boundary-types
 export const Patch = (path: string) => route('patch', path);
+// eslint-disable-next-line @typescript-eslint/naming-convention, @typescript-eslint/explicit-module-boundary-types
 export const Delete = (path: string) => route('delete', path);
 
 /**
@@ -35,6 +40,7 @@ export const Delete = (path: string) => route('delete', path);
  * @param {AuthorisationRule} rule - An `AuthorisationRule` object ({ level: ... } OR { feature: ..., action: ... }).
  */
 export function authorize(rule: AuthorisationRule): MethodDecorator {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   return (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
     // Validate that the rule is correctly formed
     const hasLevel = rule.level !== undefined && rule.level !== null;
@@ -64,6 +70,7 @@ export function authorize(rule: AuthorisationRule): MethodDecorator {
  * The registration logic will decide what to do with it (e.g., not expose it publicly).
  */
 export function internal(): MethodDecorator {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   return (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
     globalMetadataStorage.updateRouteMetadata(target.constructor, propertyKey, {
       isInternal: true,
@@ -76,6 +83,7 @@ export function internal(): MethodDecorator {
  * @param {AnyZodObject} schema Zod schema to validate { body, query, params }.
  */
 export function validate(schema: AnyZodObject): MethodDecorator {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   return (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
     globalMetadataStorage.updateRouteMetadata(target.constructor, propertyKey, {
       validationSchema: schema,
@@ -95,6 +103,7 @@ export function paginate(
     searchable?: boolean | string[];
   } = { sortable: true, filterable: true, searchable: true },
 ): MethodDecorator {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   return (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
     globalMetadataStorage.updateRouteMetadata(target.constructor, propertyKey, {
       canPaginate: true,
@@ -110,6 +119,7 @@ export function paginate(
  * @param {boolean | string[]} [allowedFields=true] - `true` (all fields), `false` (disabled), or `string[]` (allowed fields).
  */
 export function sortable(allowedFields: boolean | string[] = true): MethodDecorator {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   return (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
     globalMetadataStorage.updateRouteMetadata(target.constructor, propertyKey, {
       sortableFields: allowedFields,
@@ -123,6 +133,7 @@ export function sortable(allowedFields: boolean | string[] = true): MethodDecora
  *                                                  `false` (disabled), or `string[]` (potentially hints which fields are searchable).
  */
 export function searchable(allowedFields: boolean | string[] = true): MethodDecorator {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   return (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
     globalMetadataStorage.updateRouteMetadata(target.constructor, propertyKey, {
       searchableFields: allowedFields,
@@ -135,6 +146,7 @@ export function searchable(allowedFields: boolean | string[] = true): MethodDeco
  * @param {boolean | string[]} [allowedFields=true] - `true` (all fields), `false` (disabled), or `string[]` (allowed fields).
  */
 export function filterable(allowedFields: boolean | string[] = true): MethodDecorator {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   return (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
     globalMetadataStorage.updateRouteMetadata(target.constructor, propertyKey, {
       filterableFields: allowedFields,
