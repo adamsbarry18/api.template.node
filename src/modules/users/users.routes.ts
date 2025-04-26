@@ -1,4 +1,4 @@
-import { ForbiddenError, UnauthorizedError } from '@/common/errors/httpErrors';
+import { BadRequestError, ForbiddenError, UnauthorizedError } from '@/common/errors/httpErrors';
 import { BaseRouter } from '@/common/routing/BaseRouter';
 import {
   Get,
@@ -13,7 +13,7 @@ import {
 } from '@/common/routing/decorators';
 import { Request, Response, NextFunction } from '@/config/http';
 
-import { SecurityLevel, User } from './models/users.entity';
+import { SecurityLevel } from './models/users.entity';
 import { UsersService } from './services/users.services';
 
 export default class UserRouter extends BaseRouter {
@@ -50,7 +50,12 @@ export default class UserRouter extends BaseRouter {
   @filterable(['level', 'internal', 'email'])
   @searchable(['email', 'name', 'surname'])
   async getAllUsers(req: Request, res: Response, next: NextFunction): Promise<void> {
-    await this.pipe(res, req, next, () => this.usersService.findAll({ requestingUser: req.user }));
+    await this.pipe(res, req, next, () =>
+      this.usersService.findAll({
+        limit: req.pagination?.limit,
+        offset: req.pagination?.offset,
+      }),
+    );
   }
 
   /**
@@ -69,7 +74,7 @@ export default class UserRouter extends BaseRouter {
    *         description: Unauthorized
    */
   @Get('/users/me')
-  @authorize({ level: SecurityLevel.READER })
+  @authorize({ level: SecurityLevel.USER })
   async getCurrentUser(req: Request, res: Response, next: NextFunction): Promise<void> {
     const userId = req.user?.id;
     if (!userId) {
@@ -128,20 +133,44 @@ export default class UserRouter extends BaseRouter {
   @authorize({ level: SecurityLevel.USER })
   async getUserByIdentifier(req: Request, res: Response, next: NextFunction): Promise<void> {
     const identifier = req.params.identifier;
+    const requestingUser = req.user;
 
-    if (identifier.includes('@')) {
-      const userEmail = identifier;
-      await this.pipe(res, req, next, () => this.usersService.findByEmail(userEmail));
-    } else {
-      const userId = parseInt(identifier, 10);
-      if (isNaN(userId)) {
-        return next(
-          new ForbiddenError(
-            `Invalid identifier: ${identifier}. Must be a numeric ID or an email.`,
-          ),
-        );
+    if (!requestingUser) {
+      return next(new UnauthorizedError('Authentication required.'));
+    }
+
+    const checkAccess = (targetUserId: number | undefined) => {
+      if (targetUserId === undefined) return;
+      if (requestingUser.id !== targetUserId && requestingUser.level < SecurityLevel.ADMIN) {
+        throw new ForbiddenError('Insufficient permissions to access this user.');
       }
-      await this.pipe(res, req, next, () => this.usersService.findById(userId));
+    };
+
+    try {
+      if (identifier.includes('@')) {
+        const userEmail = identifier;
+        await this.pipe(res, req, next, async () => {
+          const user = await this.usersService.findByEmail(userEmail);
+          checkAccess(user.id);
+          return user;
+        });
+      } else {
+        const userId = parseInt(identifier, 10);
+        if (isNaN(userId)) {
+          return next(
+            new ForbiddenError(
+              `Invalid identifier: ${identifier}. Must be a numeric ID or an email.`,
+            ),
+          );
+        }
+        await this.pipe(res, req, next, async () => {
+          checkAccess(userId);
+          const user = await this.usersService.findById(userId);
+          return user;
+        });
+      }
+    } catch (error) {
+      next(error);
     }
   }
 
@@ -210,13 +239,16 @@ export default class UserRouter extends BaseRouter {
    *         description: User not found
    */
   @Put('/users/:id')
-  @authorize({ level: SecurityLevel.READER })
+  @authorize({ level: SecurityLevel.USER })
   async updateUser(req: Request, res: Response, next: NextFunction): Promise<void> {
     const userIdToUpdate = parseInt(req.params.id, 10);
     const updateData = req.body;
 
-    if (req.user?.id !== userIdToUpdate && (req.user?.level ?? -1) < SecurityLevel.ADMIN) {
-      return next(new ForbiddenError('You can only update your own account'));
+    if (
+      req.user?.id !== userIdToUpdate &&
+      (req.user?.level ?? SecurityLevel.EXTERNAL) < SecurityLevel.ADMIN
+    ) {
+      return next(new ForbiddenError('Insufficient permissions to update this user.'));
     }
     await this.pipe(res, req, next, () =>
       this.usersService.update(userIdToUpdate, updateData, { requestingUser: req.user }),
@@ -248,12 +280,12 @@ export default class UserRouter extends BaseRouter {
    *         description: User not found
    */
   @Delete('/users/:id')
-  @authorize({ level: SecurityLevel.READER })
+  @authorize({ level: SecurityLevel.ADMIN })
   async deleteUser(req: Request, res: Response, next: NextFunction): Promise<void> {
     const userIdToDelete = parseInt(req.params.id, 10);
 
-    if (req.user?.id !== userIdToDelete && (req.user?.level ?? -1) < SecurityLevel.ADMIN) {
-      return next(new ForbiddenError('You can only delete your own account'));
+    if (req.user?.id === userIdToDelete) {
+      return next(new ForbiddenError('Admin cannot delete their own account via this route.'));
     }
     await this.pipe(
       res,
@@ -298,16 +330,25 @@ export default class UserRouter extends BaseRouter {
    *         description: User not found
    */
   @Put('/users/:id/preferences')
-  @authorize({ level: SecurityLevel.READER })
+  @authorize({ level: SecurityLevel.USER })
   async updatePreferences(req: Request, res: Response, next: NextFunction): Promise<void> {
-    const userId = parseInt(req.params.id, 10);
+    const userIdToUpdate = parseInt(req.params.id, 10);
     const preferences = req.body;
+    const requestingUser = req.user;
 
-    if (req.user?.id !== userId && (req.user?.level ?? -1) < SecurityLevel.ADMIN) {
-      return next(new ForbiddenError('You can only update your own preferences'));
+    if (!requestingUser) {
+      return next(new UnauthorizedError('Authentication required.'));
     }
 
-    await this.pipe(res, req, next, () => this.usersService.updatePreferences(userId, preferences));
+    if (requestingUser.id !== userIdToUpdate && requestingUser.level < SecurityLevel.ADMIN) {
+      return next(
+        new ForbiddenError('Admin rights required to update preferences for other users.'),
+      );
+    }
+
+    await this.pipe(res, req, next, () =>
+      this.usersService.updatePreferences(userIdToUpdate, preferences),
+    );
   }
 
   /**
@@ -335,14 +376,91 @@ export default class UserRouter extends BaseRouter {
    *         description: User not found
    */
   @Delete('/users/:id/preferences')
-  @authorize({ level: SecurityLevel.READER })
+  @authorize({ level: SecurityLevel.USER })
   async resetPreferences(req: Request, res: Response, next: NextFunction): Promise<void> {
-    const userId = parseInt(req.params.id, 10);
+    const userIdToReset = parseInt(req.params.id, 10);
+    const requestingUser = req.user;
 
-    if (req.user?.id !== userId && (req.user?.level ?? -1) < SecurityLevel.ADMIN) {
-      return next(new ForbiddenError('You can only reset your own preferences'));
+    if (!requestingUser) {
+      return next(new UnauthorizedError('Authentication required.'));
     }
 
-    await this.pipe(res, req, next, () => this.usersService.resetPreferences(userId));
+    if (requestingUser.id !== userIdToReset && requestingUser.level < SecurityLevel.ADMIN) {
+      return next(
+        new ForbiddenError('Admin rights required to reset preferences for other users.'),
+      );
+    }
+
+    await this.pipe(res, req, next, () => this.usersService.resetPreferences(userIdToReset));
+  }
+
+  /**
+   * @openapi
+   * /users/{userId}/preferences/{key}:
+   *   put:
+   *     summary: Update a specific user preference by key
+   *     tags:
+   *       - Users
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: userId
+   *         required: true
+   *         schema:
+   *           type: integer
+   *         description: User ID
+   *       - in: path
+   *         name: key
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The preference key to update
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               value:
+   *                 description: The new value for the preference key
+   *             required:
+   *               - value
+   *     responses:
+   *       200:
+   *         description: Preference key updated successfully
+   *       400:
+   *         description: Bad request (e.g., missing value in body)
+   *       403:
+   *         description: Forbidden
+   *       404:
+   *         description: User not found
+   */
+  @Put('/users/:userId/preferences/:key')
+  @authorize({ level: SecurityLevel.USER })
+  async updatePreferenceByKey(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const userIdToUpdate = parseInt(req.params.userId, 10);
+    const key = req.params.key;
+    const { value } = req.body;
+    const requestingUser = req.user;
+
+    if (!requestingUser) {
+      return next(new UnauthorizedError('Authentication required.'));
+    }
+
+    if (value === undefined) {
+      return next(new BadRequestError('Missing "value" in request body.'));
+    }
+
+    if (requestingUser.id !== userIdToUpdate && requestingUser.level < SecurityLevel.ADMIN) {
+      return next(
+        new ForbiddenError('Admin rights required to update preference key for other users.'),
+      );
+    }
+
+    await this.pipe(res, req, next, () =>
+      this.usersService.updatePreferenceByKey(userIdToUpdate, key, value),
+    );
   }
 }

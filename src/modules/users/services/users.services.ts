@@ -119,17 +119,22 @@ export class UsersService {
   }
 
   /**
-   * Retrieves all users, filtered by the requesting user's rights.
-   * @param options Optional request context.
+   * Retrieves users, optionally paginated and filtered by the requesting user's rights.
+   * @param options Optional request context including pagination.
    * @returns Array of user API responses.
    */
-  async findAll(options?: { requestingUser?: Request['user'] }): Promise<UserApiResponse[]> {
+  async findAll(options?: { limit?: number; offset?: number }): Promise<UserApiResponse[]> {
     try {
+      // La logique de filtrage basée sur requestingUser.internal a été supprimée.
+      // Si un filtrage basé sur 'internal' est toujours nécessaire,
+      // il doit être géré par les décorateurs @filterable dans la route
+      // ou ajouté explicitement ici si nécessaire pour tous les appels.
       const where: FindOptionsWhere<User> = {};
-      if (options?.requestingUser && !options.requestingUser.internal) {
-        where.internal = false;
-      }
-      const { users } = await this.userRepository.findAll({ where });
+      const { users } = await this.userRepository.findAll({
+        where, // 'where' est maintenant potentiellement vide ou basé sur d'autres filtres
+        skip: options?.offset,
+        take: options?.limit,
+      });
       // Map and filter out any potential null results before returning
       return users.map((user) => this.mapToApiResponse(user)).filter(Boolean) as UserApiResponse[];
     } catch (error) {
@@ -355,6 +360,31 @@ export class UsersService {
    */
   async resetPreferences(userId: number): Promise<UserApiResponse> {
     return this.updatePreferences(userId, null);
+  }
+
+  /**
+   * Updates a specific preference key for a user.
+   * @param userId The user ID.
+   * @param key The preference key to update.
+   * @param value The new value for the preference key.
+   * @returns The updated user API response.
+   */
+  async updatePreferenceByKey(userId: number, key: string, value: any): Promise<UserApiResponse> {
+    try {
+      const user = await this.userRepository.findById(userId);
+      if (!user) throw new NotFoundError(`User with id ${userId} not found.`);
+
+      const currentPreferences = user.preferences || {};
+      currentPreferences[key] = value;
+
+      // Use the existing updatePreferences method to save the changes
+      return await this.updatePreferences(userId, currentPreferences);
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        throw error;
+      }
+      throw new ServerError(`Error updating preference key '${key}' for user ${userId}: ${error}`);
+    }
   }
 
   /**
