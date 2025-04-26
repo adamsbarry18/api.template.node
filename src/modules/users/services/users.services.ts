@@ -55,21 +55,10 @@ export class UsersService {
   /**
    * Retrieves a user by their ID.
    * @param id The user ID.
-   * @param options Optional request context.
    * @returns The user API response.
    */
-  async findById(
-    id: number,
-    options?: { requestingUser?: Request['user'] },
-  ): Promise<UserApiResponse> {
-    const requestingUser = options?.requestingUser;
-    if (requestingUser) {
-      const isSelf = requestingUser.id === id;
-      const isAdmin = requestingUser.level >= SecurityLevel.ADMIN;
-      if (!isSelf && !isAdmin) {
-        throw new ForbiddenError('You do not have permission to access this user.');
-      }
-    }
+  async findById(id: number): Promise<UserApiResponse> {
+    // Permission checks are now handled solely by the @authorize decorator in the route
     try {
       const user = await this.userRepository.findById(id);
       if (!user) throw new NotFoundError(`User with id ${id} not found.`);
@@ -93,9 +82,13 @@ export class UsersService {
    * @returns The user API response.
    */
   async findByEmail(email: string): Promise<UserApiResponse> {
+    // Permission checks are now handled solely by the @authorize decorator in the route
     try {
       const user = await this.userRepository.findByEmail(email);
       if (!user) throw new NotFoundError(`User with email ${email} not found.`);
+
+      // Removed permission check block that used requestingUser
+
       const apiResponse = this.mapToApiResponse(user);
       if (!apiResponse) {
         // This should theoretically not happen if findByEmail found a user
@@ -103,7 +96,11 @@ export class UsersService {
       }
       return apiResponse;
     } catch (error) {
-      throw new ServerError(`Error finding user with email ${email} ${error}`);
+      // Let specific HTTP errors pass through, wrap others as ServerError
+      if (error instanceof NotFoundError || error instanceof ForbiddenError) {
+        throw error;
+      }
+      throw new ServerError(`Error finding user with email ${email}: ${error}`);
     }
   }
 

@@ -6,11 +6,11 @@ set -e
 
 # Stop and remove containers/volumes
 printf "[TEST] Stopping and removing containers/volumes...\n"
-docker-compose -f src/tests/docker-compose.yml down -v
+npm run test-db:stop
 
 # Start containers
 printf "[TEST] Starting containers...\n"
-docker-compose -f src/tests/docker-compose.yml up -d --build
+npm run test-db:start
 
 # Wait for services to be healthy (optional: adjust if needed)
 printf "[TEST] Waiting for services to be healthy...\n"

@@ -13,7 +13,7 @@ import {
 } from '@/common/routing/decorators';
 import { Request, Response, NextFunction } from '@/config/http';
 
-import { SecurityLevel } from './models/users.entity';
+import { SecurityLevel, User } from './models/users.entity';
 import { UsersService } from './services/users.services';
 
 export default class UserRouter extends BaseRouter {
@@ -100,13 +100,49 @@ export default class UserRouter extends BaseRouter {
    *       404:
    *         description: User not found
    */
-  @Get('/users/:id')
-  @authorize({ level: SecurityLevel.ADMIN })
-  async getUserById(req: Request, res: Response, next: NextFunction): Promise<void> {
-    const userId = parseInt(req.params.id, 10);
-    await this.pipe(res, req, next, () =>
-      this.usersService.findById(userId, { requestingUser: req.user }),
-    );
+  /**
+   * @openapi
+   * /users/{identifier}:
+   *   get:
+   *     summary: Get user by ID or email
+   *     tags:
+   *       - Users
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: identifier
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: User ID (numeric) or email address
+   *     responses:
+   *       200:
+   *         description: User found
+   *       403:
+   *         description: Forbidden (Insufficient permissions)
+   *       404:
+   *         description: User not found
+   */
+  @Get('/users/:identifier')
+  @authorize({ level: SecurityLevel.USER })
+  async getUserByIdentifier(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const identifier = req.params.identifier;
+
+    if (identifier.includes('@')) {
+      const userEmail = identifier;
+      await this.pipe(res, req, next, () => this.usersService.findByEmail(userEmail));
+    } else {
+      const userId = parseInt(identifier, 10);
+      if (isNaN(userId)) {
+        return next(
+          new ForbiddenError(
+            `Invalid identifier: ${identifier}. Must be a numeric ID or an email.`,
+          ),
+        );
+      }
+      await this.pipe(res, req, next, () => this.usersService.findById(userId));
+    }
   }
 
   /**

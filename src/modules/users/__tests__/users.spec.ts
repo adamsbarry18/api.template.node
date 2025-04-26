@@ -24,7 +24,7 @@ describe('Users API', () => {
           surname: 'toto',
           color: '#FAFAFA',
           password: 'TotoLeTesteur1!',
-          level: 0,
+          level: 2,
           preferences: { hello: 'world' },
         });
       expect(res.status).toBe(201);
@@ -102,12 +102,72 @@ describe('Users API', () => {
       expect(entry.name).toBe('test');
       expect(entry.surname).toBe('toto');
       expect(entry.color).toBe('#FAFAFA');
-      expect(entry.level).toBe(0);
+      expect(entry.level).toBe(2);
       expect(entry).toHaveProperty('createdTime');
       expect(entry).toHaveProperty('updatedTime');
       expect(entry).toHaveProperty('preferences');
       expect(entry.preferences).toHaveProperty('hello', 'world');
       expect(entry).not.toHaveProperty('password');
+    });
+  });
+  describe('GET /users/:identifier (email)', () => {
+    // Updated describe block
+    it('should fail to get user with non-existing email', async () => {
+      const nonExistingEmail = 'nonexistent@yopmail.com';
+      const res = await request(app)
+        .get(`/api/v1/users/${nonExistingEmail}`) // Use the unified route
+        .set('Authorization', `Bearer ${adminToken}`);
+      // Expect 404 because the service's findByEmail should throw NotFoundError
+      expect(res.status).toBe(404);
+      expect(res.body.status).toBe('fail');
+    });
+
+    it('should get user from valid email', async () => {
+      // Ensure the user exists before trying to fetch by email
+      // We use the user created in the POST /users test
+      const res = await request(app)
+        .get(`/api/v1/users/${userMail}`) // Use the unified route
+        .set('Authorization', `Bearer ${adminToken}`);
+      // Expect 200 because the service's findByEmail should succeed
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('success');
+      const entry = res.body.data;
+      expect(entry.id).toBe(createdUserId);
+      expect(entry.email).toBe(userMail);
+      expect(entry.name).toBe('test'); // Initial name before update
+      expect(entry.surname).toBe('toto');
+      expect(entry.color).toBe('#FAFAFA');
+      expect(entry.level).toBe(2);
+      expect(entry).toHaveProperty('createdTime');
+      expect(entry).toHaveProperty('updatedTime');
+      expect(entry).toHaveProperty('preferences');
+      // Check preferences after potential updates in other tests
+      // expect(entry.preferences).toHaveProperty('hello', 'world');
+      expect(entry).not.toHaveProperty('password');
+    });
+
+    it('should fail to get user by email without admin rights', async () => {
+      // Create a non-admin user and get their token
+      const nonAdminEmail = `nonadmin-${uid}@yopmail.com`;
+      await request(app).post('/api/v1/users').set('Authorization', `Bearer ${adminToken}`).send({
+        email: nonAdminEmail,
+        name: 'Non',
+        surname: 'Admin',
+        password: 'Password123!',
+        level: 2, // READER level
+      });
+
+      const loginRes = await request(app)
+        .post('/api/v1/auth/login')
+        .send({ email: nonAdminEmail, password: 'Password123!' });
+      const nonAdminToken = loginRes.body.data.token;
+
+      const res = await request(app)
+        .get(`/api/v1/users/${userMail}`)
+        .set('Authorization', `Bearer ${nonAdminToken}`);
+      expect(res.status).toBe(403);
+      expect(res.body.status).toBe('fail');
+      expect(res.body.status).toBe('fail');
     });
   });
 
