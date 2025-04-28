@@ -1,14 +1,12 @@
 {
   "compilerOptions": {
-    "lib": [
-      "es2022"
-   ],
-   "module": "es2022",
-   "moduleResolution": "node", 
-   "outDir": "./dist",
-   "rootDir": "./src",
-   "baseUrl": ".",
-   "paths": {
+    "lib": ["es2022"],
+    "module": "es2022",
+    "moduleResolution": "node",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "baseUrl": ".",
+    "paths": {
       "@/*": ["src/*"]
     },
     "esModuleInterop": true,
@@ -21,7 +19,7 @@
     "sourceMap": true,
     "types": ["vitest/globals"],
     "resolveJsonModule": true,
-    "declaration": true, 
+    "declaration": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

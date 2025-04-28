@@ -157,7 +157,7 @@ export default class AuthorizationRouter extends BaseRouter {
    * @openapi
    * /authorization/users/{userId}:
    *   put:
-   *     summary: Update user authorization
+   *     summary: Update user authorization level and specific permissions
    *     tags:
    *       - Authorization
    *     security:
@@ -177,22 +177,30 @@ export default class AuthorizationRouter extends BaseRouter {
    *             properties:
    *               level:
    *                 type: integer
-   *               authorisationOverrides:
-   *                 type: string
+   *                 description: Optional new security level for the user
+   *               permissions:
+   *                 type: object
+   *                 nullable: true
+   *                 description: Optional specific permission overrides. Maps feature names to arrays of allowed action names. Set to null to remove overrides.
+   *                 example:
+   *                   user: ['read', 'write']
+   *                   config: ['read']
    *     responses:
    *       200:
-   *         description: Authorization updated
+   *         description: Authorization updated successfully
+   *       404:
+   *         description: User not found
    */
   @Put('/authorization/users/:userId')
   @authorize({ level: SecurityLevel.ADMIN })
   async updateAuthorization(req: Request, res: Response, next: NextFunction): Promise<void> {
     const userId = parseInt(req.params.userId, 10);
-    const { level, authorisationOverrides } = req.body;
+    const { level, permissions } = req.body;
 
     await this.pipe(res, req, next, () =>
       this.authorizationService.updateAuthorization(userId, {
         level: level !== undefined ? parseInt(level, 10) : undefined,
-        authorisationOverrides,
+        permissions,
       }),
     );
   }

@@ -48,7 +48,7 @@ beforeAll(async () => {
         await waitFor(async () => {
           if (!redisClient?.isReady) throw new Errors.ServiceUnavailableError('Redis not ready');
         }, 'Redis client');
-      })()
+      })(),
     ]);
 
     // 3. API router

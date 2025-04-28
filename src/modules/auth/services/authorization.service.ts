@@ -133,19 +133,19 @@ export class AuthorizationService {
    */
   async updateAuthorization(
     userId: number,
-    data: { level?: number; authorisationOverrides?: string | null },
+    data: { level?: number; permissions?: Record<string, string[]> | null },
   ): Promise<{ success: boolean }> {
     const user = await this.userRepository.findById(userId);
     if (!user) throw new NotFoundError('User not found');
 
     if (data.level !== undefined) user.level = data.level;
-    if (data.authorisationOverrides !== undefined)
-      user.authorisationOverrides = data.authorisationOverrides;
+    if (data.permissions !== undefined) {
+      user.authorisationOverrides =
+        data.permissions === null ? null : this.encodePermissionsToOverrides(data.permissions);
+    }
 
     await this.userRepository.save(user);
-
     await this.invalidateAuthCache(userId);
-
     return { success: true };
   }
 
@@ -415,6 +415,68 @@ export class AuthorizationService {
       }
     }
     return defaultMask;
+  }
+
+  /**
+   * Encodes a permissions object into the authorisationOverrides string format.
+   * @param permissions An object mapping feature names to arrays of action names.
+   * @returns The encoded string or null if permissions object is empty.
+   */
+  private encodePermissionsToOverrides(
+    permissions: Record<string, string[]> | null,
+  ): string | null {
+    if (!permissions || Object.keys(permissions).length === 0) {
+      return null;
+    }
+
+    const parts: number[] = [];
+    const featureNameToIdMap = new Map<string, number>();
+    FEATURES_CONFIG.forEach((f) => featureNameToIdMap.set(f.name, f.id));
+
+    for (const featureName in permissions) {
+      if (Object.prototype.hasOwnProperty.call(permissions, featureName)) {
+        const featureId = featureNameToIdMap.get(featureName);
+        if (featureId === undefined) {
+          logger.warn(`Encoding permissions: Unknown feature name '${featureName}'. Skipping.`);
+          continue;
+        }
+
+        const featureInfo = featuresProcessedFlagsMap.get(featureId);
+        if (!featureInfo) {
+          logger.warn(
+            `Encoding permissions: Feature ID ${featureId} (${featureName}) not found in processed map. Skipping.`,
+          );
+          continue;
+        }
+
+        let permissionMask = 0;
+        const allowedActions = permissions[featureName];
+        if (Array.isArray(allowedActions)) {
+          for (const actionName of allowedActions) {
+            const actionConfig = featureInfo.flags[actionName];
+            if (actionConfig) {
+              permissionMask |= actionConfig.combinedMask;
+            } else {
+              logger.warn(
+                `Encoding permissions: Unknown action name '${actionName}' for feature '${featureName}'. Skipping.`,
+              );
+            }
+          }
+        } else {
+          logger.warn(
+            `Encoding permissions: Invalid action list for feature '${featureName}'. Expected array, got ${typeof allowedActions}. Skipping.`,
+          );
+          continue;
+        }
+
+        // Combine featureId (16 bits) and mask (16 bits) into a 32-bit integer
+        // Only add if there's a valid mask (even if it's 0, meaning explicit denial of all actions for this feature override)
+        const combined = (featureId << 16) | permissionMask;
+        parts.push(combined);
+      }
+    }
+
+    return parts.length > 0 ? parts.join('.') : null;
   }
 
   /**

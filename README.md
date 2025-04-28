@@ -1,6 +1,7 @@
 # api.template.node
 
 # Starting redis server
+
 sudo service redis-server start
 sudo ss -tuln | grep :3000
 docker ps -q | xargs -r docker kill
@@ -8,7 +9,6 @@ docker ps -q | xargs -r docker stop
 sudo ss -tuln
 
 Remove-Item -Recurse -Force node_modules, package-lock.json; npm install
-
 
 - 📦api.template.node
 - ┣ 📂build
@@ -70,7 +70,7 @@ Remove-Item -Recurse -Force node_modules, package-lock.json; npm install
 - ┃ ┃ ┃ ┗ 📜users.entity.ts
 - ┃ ┃ ┣ 📂services
 - ┃ ┃ ┃ ┗ 📜users.services.ts
-- ┃ ┃ ┣ 📂__tests__
+- ┃ ┃ ┣ 📂**tests**
 - ┃ ┃ ┃ ┗ 📜users.spec.ts
 - ┃ ┃ ┗ 📜users.routes.ts
 - ┣ 📂tests

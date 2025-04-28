@@ -5,7 +5,6 @@ import swaggerJSDoc from 'swagger-jsdoc';
 import config from '@/config';
 import { authSchemas, authorizationSchemas, userSchemas } from './openapi-schemas/users';
 
-
 const swaggerDefinition = {
   openapi: '3.0.3',
   info: {
@@ -54,7 +53,7 @@ const swaggerDefinition = {
       BadRequest: {
         description: 'Bad Request',
         content: {
-          'applicationJson': {
+          applicationJson: {
             schema: { $ref: '#/components/schemas/ErrorResponse' },
             example: {
               success: false,
@@ -67,7 +66,7 @@ const swaggerDefinition = {
       ValidationError: {
         description: 'Validation Failed',
         content: {
-          'applicationJson': {
+          applicationJson: {
             schema: { $ref: '#/components/schemas/ErrorResponse' },
             example: {
               success: false,
@@ -81,7 +80,7 @@ const swaggerDefinition = {
       Unauthorized: {
         description: 'Unauthorized',
         content: {
-          'applicationJson': {
+          applicationJson: {
             schema: { $ref: '#/components/schemas/ErrorResponse' },
             example: {
               success: false,
@@ -94,7 +93,7 @@ const swaggerDefinition = {
       Forbidden: {
         description: 'Forbidden',
         content: {
-          'applicationJson': {
+          applicationJson: {
             schema: { $ref: '#/components/schemas/ErrorResponse' },
             example: {
               success: false,
@@ -107,7 +106,7 @@ const swaggerDefinition = {
       NotFound: {
         description: 'Not Found',
         content: {
-          'applicationJson': {
+          applicationJson: {
             schema: { $ref: '#/components/schemas/ErrorResponse' },
             example: {
               success: false,
@@ -120,7 +119,7 @@ const swaggerDefinition = {
       Conflict: {
         description: 'Conflict',
         content: {
-          'applicationJson': {
+          applicationJson: {
             schema: { $ref: '#/components/schemas/ErrorResponse' },
             example: {
               success: false,
@@ -133,7 +132,7 @@ const swaggerDefinition = {
       InternalServerError: {
         description: 'Internal Server Error',
         content: {
-          'applicationJson': {
+          applicationJson: {
             schema: { $ref: '#/components/schemas/ErrorResponse' },
             example: {
               success: false,
@@ -146,7 +145,7 @@ const swaggerDefinition = {
       ServiceUnavailable: {
         description: 'Service Unavailable',
         content: {
-          'applicationJson': {
+          applicationJson: {
             schema: { $ref: '#/components/schemas/ErrorResponse' },
             example: {
               success: false,

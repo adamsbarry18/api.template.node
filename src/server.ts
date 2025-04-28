@@ -121,7 +121,8 @@ async function gracefulShutdown(signal: NodeJS.Signals | string): Promise<void> 
   // Close TypeORM connection
   if (appDataSource.isInitialized) {
     closePromises.push(
-      appDataSource.destroy()
+      appDataSource
+        .destroy()
         .then(() => logger.info('  -> TypeORM connection closed.'))
         .catch((dbError: unknown) => {
           logger.error({ err: dbError }, 'Error closing TypeORM connection.');
