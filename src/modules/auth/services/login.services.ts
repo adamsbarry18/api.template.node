@@ -173,7 +173,7 @@ export class LoginService {
     newPassword: string,
     referer?: string,
   ): Promise<string> {
-    const success = await this.passwordService.updateExpiredPassword({
+    const success = await this.passwordService.updatePassword({
       email,
       password: newPassword,
       referer,

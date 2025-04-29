@@ -319,11 +319,11 @@ export class PasswordService {
   }
 
   /**
-   * Changes the password for a user whose password is expired.
+   * Changes the password for a user whose password.
    * @param params Object containing userId or email, new password, and optional referer
    * @returns True if the password was updated and confirmation email sent
    */
-  async updateExpiredPassword(params: {
+  async updatePassword(params: {
     userId?: number;
     email?: string;
     password: string;

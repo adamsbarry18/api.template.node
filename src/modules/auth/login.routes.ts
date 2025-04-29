@@ -1,15 +1,17 @@
-import { UnauthorizedError } from '@/common/errors/httpErrors';
+import { Errors, UnauthorizedError } from '@/common/errors/httpErrors';
 import { BaseRouter } from '@/common/routing/BaseRouter';
-import { Post, authorize, internal } from '@/common/routing/decorators';
+import { Post, Put, authorize, internal } from '@/common/routing/decorators';
 import { Request, Response, NextFunction } from '@/config/http';
 
 import { LoginService } from './services/login.services';
 import { PasswordService } from './services/password.services';
 import { SecurityLevel } from '../users/models/users.entity';
+import { AuthorizationService } from './services/authorization.service';
 
 export default class LoginRouter extends BaseRouter {
   loginService = LoginService.getInstance();
   passwordService = PasswordService.getInstance();
+  authorizationService = AuthorizationService.getInstance();
 
   /**
    * @openapi
@@ -197,6 +199,79 @@ export default class LoginRouter extends BaseRouter {
 
   /**
    * @openapi
+   * /users/{userId}/password:
+   *   put:
+   *     summary: Update a user's password
+   *     tags:
+   *       - Authentication
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: userId
+   *         required: true
+   *         schema:
+   *           type: integer
+   *         description: The ID of the user whose password is to be updated
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - password
+   *             properties:
+   *               password:
+   *                 type: string
+   *                 format: password
+   *                 description: The new password for the user
+   *     responses:
+   *       200:
+   *         description: Password updated successfully
+   *       400:
+   *         description: Bad Request - Missing parameters or invalid input
+   *       401:
+   *         description: Unauthorized - Invalid or missing authentication token
+   *       403:
+   *         description: Forbidden - User does not have permission to update this password
+   *       404:
+   *         description: Not Found - User ID not found
+   */
+  @Put('/users/:userId/password')
+  @authorize({ level: SecurityLevel.USER })
+  async updatePassword(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const { password } = req.body;
+    const userId = parseInt(req.params.userId, 10);
+    const referer = req.headers.referer;
+
+    if (!password) return res.jsend.fail('Parameter password not found');
+    if (!userId) return res.jsend.fail('UserId Not found');
+
+    const isEditingSelf = req?.user?.id === parseInt(req.params.id);
+
+    if (!isEditingSelf) {
+      const authorised = await this.authorizationService.checkAuthorisation(
+        userId,
+        'users',
+        'write',
+      );
+      if (!authorised) {
+        throw new Errors.ForbiddenError('Cannot edit user');
+      }
+    }
+
+    await this.pipe(res, req, next, async () =>
+      this.passwordService.updatePassword({
+        userId,
+        password,
+        referer,
+      }),
+    );
+  }
+
+  /**
+   * @openapi
    * /auth/password/expired:
    *   post:
    *     summary: Update expired password
@@ -237,7 +312,7 @@ export default class LoginRouter extends BaseRouter {
     } catch (err: any) {
       if (err.code === 'ERR_PWD_EXPIRED') {
         return this.pipe(res, req, next, async () =>
-          this.passwordService.updateExpiredPassword({
+          this.passwordService.updatePassword({
             email: email,
             password: newPassword,
             referer: referer,
