@@ -1,4 +1,4 @@
-import { Errors, UnauthorizedError } from '@/common/errors/httpErrors';
+import { Errors, ParameterError, UnauthorizedError } from '@/common/errors/httpErrors';
 import { BaseRouter } from '@/common/routing/BaseRouter';
 import { Post, Put, authorize, internal } from '@/common/routing/decorators';
 import { Request, Response, NextFunction } from '@/config/http';
@@ -7,7 +7,6 @@ import { LoginService } from './services/login.services';
 import { PasswordService } from './services/password.services';
 import { SecurityLevel } from '../users/models/users.entity';
 import { AuthorizationService } from './services/authorization.service';
-
 export default class LoginRouter extends BaseRouter {
   loginService = LoginService.getInstance();
   passwordService = PasswordService.getInstance();
@@ -242,26 +241,42 @@ export default class LoginRouter extends BaseRouter {
   @authorize({ level: SecurityLevel.USER })
   async updatePassword(req: Request, res: Response, next: NextFunction): Promise<void> {
     const { password } = req.body;
-    const userId = parseInt(req.params.userId, 10);
+    const userIdParam = req.params.userId;
     const referer = req.headers.referer;
-
-    if (!password) return res.jsend.fail('Parameter password not found');
-    if (!userId) return res.jsend.fail('UserId Not found');
-
-    const isEditingSelf = req?.user?.id === parseInt(req.params.id);
-
-    if (!isEditingSelf) {
-      const authorised = await this.authorizationService.checkAuthorisation(
-        userId,
-        'users',
-        'write',
-      );
-      if (!authorised) {
-        throw new Errors.ForbiddenError('Cannot edit user');
-      }
+    const userId = parseInt(userIdParam, 10);
+    if (isNaN(userId)) {
+      return next(new ParameterError('Invalid userId format: must be a number'));
     }
 
-    await this.pipe(res, req, next, async () =>
+    if (!password || typeof password !== 'string' || password.trim() === '') {
+      return next(new ParameterError('Missing or invalid required parameter: password'));
+    }
+    const authenticatedUserId = req.user?.id;
+    if (!authenticatedUserId) {
+      return next(new Errors.UnauthorizedError('Authentication required'));
+    }
+
+    const isEditingSelf = authenticatedUserId === userId;
+
+    if (!isEditingSelf) {
+      try {
+        const authorised = await this.authorizationService.checkAuthorisation(
+          authenticatedUserId,
+          'user',
+          'write',
+        );
+        if (!authorised) {
+          return next(
+            new Errors.ForbiddenError(
+              `User ${authenticatedUserId} cannot update password for user ${userId}`,
+            ),
+          );
+        }
+      } catch (error) {
+        return next(error);
+      }
+    }
+    await this.pipe(res, req, next, () =>
       this.passwordService.updatePassword({
         userId,
         password,

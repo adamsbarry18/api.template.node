@@ -9,7 +9,7 @@
     "prod": "cross-env NODE_ENV=production node dist/server.js",
     "lint": "eslint . --cache",
     "lint:fix": "eslint . --fix --cache",
-    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\" \"*.{js,json,md}\"",
+    "format": "prettier --write \"src/**/*.ts\" \"*.{js,json,md}\"",
     "clean": "rimraf dist && mkdir dist",
     "test:coverage": "cross-env NODE_ENV=test dotenv -e .env.test vitest run --coverage --color",
     "test:local": "cross-env NODE_ENV=development dotenv -e .env.local vitest run --color",

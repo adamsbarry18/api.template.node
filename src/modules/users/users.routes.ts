@@ -441,7 +441,7 @@ export default class UserRouter extends BaseRouter {
   @authorize({ level: SecurityLevel.USER })
   async updatePreferenceByKey(req: Request, res: Response, next: NextFunction): Promise<void> {
     const userIdToUpdate = parseInt(req.params.userId, 10);
-    const key = req.params.key;
+    const { key } = req.params;
     const { value } = req.body;
     const requestingUser = req.user;
 

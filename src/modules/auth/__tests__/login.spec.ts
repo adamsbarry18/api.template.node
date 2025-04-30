@@ -8,18 +8,20 @@ import { User } from '@/modules/users/models/users.entity';
 
 import { PasswordService } from '../services/password.services';
 
+import { adminToken } from '@/tests/globalSetup';
 const passwordService = PasswordService.getInstance();
 
 const testEmail = 'user.test2@example.com';
 let currentPassword = 'Password123!';
 
-describe('Auth API', () => {
-  let resetCode: string;
-  let confirmCode: string;
-  let userToken: string;
+let resetCode: string;
+let confirmCode: string;
+let userToken: string;
+let userTokenForPutTests: string;
+let testUserId: number;
 
+describe('Auth API', () => {
   beforeAll(async () => {
-    // Clean up Redis keys for test user
     if (redisClient) {
       const keys = await redisClient.keys('api:users:*');
       for (const key of keys) {
@@ -27,12 +29,31 @@ describe('Auth API', () => {
       }
     }
 
-    // Reset test user password to initial state
     const initialPassword = 'Password123!';
     const userRepo = appDataSource.getRepository(User);
     const hashedPassword = await passwordService.hashPassword(initialPassword);
     await userRepo.update({ email: testEmail }, { password: hashedPassword });
     currentPassword = initialPassword;
+
+    const testUser = await userRepo.findOneBy({ email: testEmail });
+    if (!testUser) throw new Error('Test user not found after initial setup');
+    testUserId = testUser.id;
+
+    const loginRes = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: testEmail, password: currentPassword });
+    if (loginRes.status !== 200 || !loginRes.body.data.token) {
+      throw new Error('Failed to login test user during initial setup');
+    }
+    userToken = loginRes.body.data.token;
+
+    const loginResForPut = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: testEmail, password: currentPassword });
+    if (loginResForPut.status !== 200 || !loginResForPut.body.data.token) {
+      throw new Error('Failed to get a fresh token for PUT tests during setup');
+    }
+    userTokenForPutTests = loginResForPut.body.data.token;
   });
 
   describe('POST /auth/login', () => {
@@ -54,7 +75,7 @@ describe('Auth API', () => {
         .send({ email: testEmail, password: currentPassword });
       expect(res.status).toBe(200);
       expect(res.body.data.token).toBeTruthy();
-      userToken = res.body.data.token; // Assign token to userToken
+      userToken = res.body.data.token;
     });
   });
 
@@ -67,7 +88,7 @@ describe('Auth API', () => {
     it('should logout successfully', async () => {
       const res = await request(app)
         .post('/api/v1/auth/logout')
-        .set('Authorization', `Bearer ${userToken}`); // This line should already be correct from the previous attempt, but ensuring it stays
+        .set('Authorization', `Bearer ${userToken}`);
       expect(res.status).toBe(200);
       expect(res.body.data.message).toMatch(/Logout successful/i);
     });
@@ -86,7 +107,6 @@ describe('Auth API', () => {
       expect(res.status).toBe(200);
       expect(res.body.data.message).toMatch(/If your email exists/i);
 
-      // Récupère le code dans Redis (simulateur, car pas d'email réel)
       if (redisClient) {
         const keys = await redisClient.keys('api:users:reset-password:*');
         expect(keys.length).toBeGreaterThan(0);
@@ -116,9 +136,8 @@ describe('Auth API', () => {
         .send({ password: newPassword });
       expect(res.status).toBe(200);
       expect(res.body.data.message).toMatch(/Password reset successful/i);
-      currentPassword = newPassword; // <-- MAJ du mot de passe courant
+      currentPassword = newPassword;
 
-      // Vérifie que le code a été supprimé de Redis
       if (redisClient) {
         await new Promise((res) => setTimeout(res, 1000));
         const exists = await redisClient.get(`api:users:reset-password:${resetCode}`);
@@ -134,7 +153,6 @@ describe('Auth API', () => {
     });
 
     it('should update expired password and send confirmation email (simulate)', async () => {
-      // Simule un mot de passe expiré pour le test user
       const userRepo = appDataSource.getRepository('User');
       await userRepo.update(
         { email: testEmail },
@@ -146,9 +164,8 @@ describe('Auth API', () => {
         .post('/api/v1/auth/password/expired')
         .send({ email: testEmail, password: 'NewTestPwd1!', newPassword });
       expect(res.status).toBe(200);
-      currentPassword = newPassword; // <-- MAJ du mot de passe courant
+      currentPassword = newPassword;
 
-      // Récupère le code de confirmation dans Redis
       if (redisClient) {
         const keys = await redisClient.keys('api:users:confirm-password:*');
         expect(keys.length).toBeGreaterThan(0);
@@ -174,7 +191,6 @@ describe('Auth API', () => {
       expect(res.status).toBe(200);
       expect(res.body.data.message).toMatch(/Password confirmed/i);
 
-      // Vérifie que le code a été supprimé de Redis
       if (redisClient) {
         await new Promise((res) => setTimeout(res, 100));
         const exists = await redisClient.get(`api:users:confirm-password:${confirmCode}`);
@@ -203,5 +219,200 @@ describe('Auth API', () => {
       expect(res.status).toBe(200);
       expect(res.body.data.token).toBeTruthy();
     });
+  });
+});
+
+describe('PUT /users/:userId/password', () => {
+  let confirmationCodeForUpdate: string;
+
+  it('should fail without authentication token', async () => {
+    const res = await request(app)
+      .put(`/api/v1/users/${testUserId}/password`)
+      .send({ password: 'NewPassword123!' });
+    expect(res.status).toBe(401);
+  });
+
+  it('should fail with invalid userId format', async () => {
+    const res = await request(app)
+      .put('/api/v1/users/invalid-id/password')
+      .set('Authorization', `Bearer ${userTokenForPutTests}`)
+      .send({ password: 'NewPassword123!' });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/Invalid userId format/i);
+  });
+
+  it('should fail with missing password', async () => {
+    const res = await request(app)
+      .put(`/api/v1/users/${testUserId}/password`)
+      .set('Authorization', `Bearer ${userTokenForPutTests}`)
+      .send({});
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/Missing or invalid required parameter: password/i);
+  });
+
+  it('should fail with password identical to the current one', async () => {
+    const res = await request(app)
+      .put(`/api/v1/users/${testUserId}/password`)
+      .set('Authorization', `Bearer ${userTokenForPutTests}`)
+      .send({ password: currentPassword });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe('Bad request');
+    expect(res.body.data).toMatch(/New password must be different/i);
+  });
+
+  it('should fail with password not meeting complexity requirements', async () => {
+    const res = await request(app)
+      .put(`/api/v1/users/${testUserId}/password`)
+      .set('Authorization', `Bearer ${userTokenForPutTests}`)
+      .send({ password: 'weak' });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe('Bad request');
+    expect(res.body.data).toMatch(/Password security is too low/i);
+  });
+
+  it('should successfully update own password and store confirmation code', async () => {
+    const newPasswordForSelf = 'MyNewSecurePwd1!';
+    const res = await request(app)
+      .put(`/api/v1/users/${testUserId}/password`)
+      .set('Authorization', `Bearer ${userTokenForPutTests}`)
+      .send({ password: newPasswordForSelf });
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('success');
+    expect(res.body.data).toBe(true);
+
+    if (redisClient) {
+      const keys = await redisClient.keys(`api:users:confirm-password:*`);
+      expect(keys.length).toBeGreaterThan(0);
+      let userConfirmKey: string | undefined;
+      for (const key of keys) {
+        const storedUserId = await redisClient.get(key);
+        if (storedUserId === String(testUserId)) {
+          userConfirmKey = key;
+          break;
+        }
+      }
+      expect(userConfirmKey).toBeTruthy();
+      if (userConfirmKey) {
+        const extractedCode = userConfirmKey.split(':').pop();
+        if (extractedCode) {
+          confirmationCodeForUpdate = extractedCode;
+        } else {
+          throw new Error(`Could not extract confirmation code from Redis key: ${userConfirmKey}`);
+        }
+      }
+    }
+  });
+
+  it('should confirm the password update using the code', async () => {
+    expect(confirmationCodeForUpdate).toBeTruthy();
+    const res = await request(app).post(
+      `/api/v1/auth/password/${confirmationCodeForUpdate}/confirm`,
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.data.message).toMatch(/Password confirmed successfully/i);
+
+    currentPassword = 'MyNewSecurePwd1!';
+
+    if (redisClient) {
+      await new Promise((res) => setTimeout(res, 100));
+      const exists = await redisClient.get(
+        `api:users:confirm-password:${confirmationCodeForUpdate}`,
+      );
+      expect(exists).toBeFalsy();
+    }
+
+    const loginResAfterConfirm = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: testEmail, password: currentPassword });
+    expect(
+      loginResAfterConfirm.status,
+      'Failed to login with new password after confirmation',
+    ).toBe(200);
+    userTokenForPutTests = loginResAfterConfirm.body.data.token;
+    expect(userTokenForPutTests).toBeTruthy();
+  });
+
+  it('should fail to update another user password without specific rights', async () => {
+    const otherUserId = 999;
+    const res = await request(app)
+      .put(`/api/v1/users/${otherUserId}/password`)
+      .set('Authorization', `Bearer ${userTokenForPutTests}`)
+      .send({ password: 'AnotherPassword1!' });
+    expect(res.status).toBe(403);
+    expect(res.body.message).toBe('Forbidden');
+    expect(res.body.data).toMatch(/cannot update password for user/i);
+  });
+
+  it('should allow admin to update another user password', async () => {
+    const newPasswordByAdmin = 'AdminSetSecurePwd1!';
+    const res = await request(app)
+      .put(`/api/v1/users/${testUserId}/password`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ password: newPasswordByAdmin });
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('success');
+    expect(res.body.data).toBe(true);
+
+    let confirmationCodeForAdminUpdate: string | undefined;
+    if (redisClient) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const keys = await redisClient.keys(`api:users:confirm-password:*`);
+      let userConfirmKey: string | undefined;
+      for (const key of keys) {
+        const storedUserId = await redisClient.get(key);
+        if (storedUserId === String(testUserId)) {
+          userConfirmKey = key;
+          break;
+        }
+      }
+      expect(
+        userConfirmKey,
+        `Confirmation key for user ${testUserId} not found in Redis`,
+      ).toBeTruthy();
+      if (userConfirmKey) {
+        const extractedCode = userConfirmKey.split(':').pop();
+        if (typeof extractedCode === 'string') {
+          confirmationCodeForAdminUpdate = extractedCode;
+        } else {
+          throw new Error('Could not extract confirmation code from Redis key');
+        }
+      }
+    }
+    expect(confirmationCodeForAdminUpdate, 'Could not extract confirmation code').toBeTruthy();
+
+    if (confirmationCodeForAdminUpdate) {
+      const confirmRes = await request(app).post(
+        `/api/v1/auth/password/${confirmationCodeForAdminUpdate}/confirm`,
+      );
+      expect(confirmRes.status).toBe(200);
+
+      currentPassword = newPasswordByAdmin;
+
+      const loginAfterAdminUpdate = await request(app)
+        .post('/api/v1/auth/login')
+        .send({ email: testEmail, password: newPasswordByAdmin });
+      expect(loginAfterAdminUpdate.status, 'Login with new password set by admin failed').toBe(200);
+
+      if (redisClient) {
+        await new Promise((res) => setTimeout(res, 100));
+        const exists = await redisClient.get(
+          `api:users:confirm-password:${confirmationCodeForAdminUpdate}`,
+        );
+        expect(exists, 'Confirmation code should be deleted after use').toBeFalsy();
+      }
+    } else {
+      throw new Error('Cannot proceed without confirmation code');
+    }
+
+    const loginResAfterAdminConfirm = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: testEmail, password: currentPassword });
+    expect(
+      loginResAfterAdminConfirm.status,
+      'Failed to login with new password after admin confirmation',
+    ).toBe(200);
+    userTokenForPutTests = loginResAfterAdminConfirm.body.data.token;
+    expect(userTokenForPutTests).toBeTruthy();
   });
 });

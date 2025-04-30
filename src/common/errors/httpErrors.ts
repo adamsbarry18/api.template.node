@@ -133,20 +133,14 @@ export const PARAMETER_ERRORS = {
   PASSWORD_IDENTICAL: 'PASSWORD_IDENTICAL',
 };
 
-export class ParameterError extends Error {
-  code?: string;
-  status?: number;
-
-  constructor(message: string) {
-    // Calling parent constructor of base Error class.
-    super(message);
-
-    if (message === PARAMETER_ERRORS.PASSWORD_IDENTICAL) {
-      this.code = 'ERR_PWD_IDENTICAL';
-      this.status = 400;
-    }
-
-    // Saving class name in the property of our custom error as a shortcut.
+export class ParameterError extends BaseError {
+  constructor(message: string, info: string | null = null) {
+    // Determine the code based on the message
+    const code =
+      message === PARAMETER_ERRORS.PASSWORD_IDENTICAL ? 'ERR_PWD_IDENTICAL' : 'ERR_BAD_REQUEST';
+    // Call the BaseError constructor with the determined code and message
+    super(code, message, info);
+    // Ensure the name is correctly set for this specific error type
     this.name = this.constructor.name;
   }
 }
