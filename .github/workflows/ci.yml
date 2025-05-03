@@ -33,10 +33,16 @@ jobs:
         run: npm ci
 
       # Optionnel: Linting/Formatting
-      # - name: Lint code
-      #   run: npm run lint
-      # - name: Check formatting
-      #   run: npm run format:check
+      - name: Lint code
+        run: npm run lint
+      - name: Check formatting
+        run: npm run format
+
+      - name: Ensure test services are stopped
+        # Arrête et supprime les conteneurs/volumes précédents via le script npm
+        run: npm run test-db:stop
+        # Continue même si la commande échoue (par exemple, si les conteneurs n'existaient pas)
+        continue-on-error: true
 
       - name: Start test services
         # Utilise --wait pour attendre que les conteneurs avec healthcheck soient sains (mysql-test, redis-test)
