@@ -57,7 +57,8 @@ jobs:
           echo "REDIS_PORT=6380" >> .env.test
           echo "MAIL_HOST=localhost" >> .env.test
           echo "MAIL_PORT=1025" >> .env.test
-          echo "JWT_SECRET=test-secret-for-ci" >> .env.test
+          # Utilisation d'un secret plus long pour satisfaire la validation (min 32 caractères)
+          echo "JWT_SECRET=88c7837c9f16943d92d17e3b173450314b4c25b1d0c63c5ce258ee0ee9ac0f16" >> .env.test
           # Ajoutez ici d'autres variables nécessaires attendues par votre config/Zod
 
       - name: Run tests
