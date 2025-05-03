@@ -59,6 +59,9 @@ jobs:
           echo "JWT_SECRET=88c7837c9f16943d92d17e3b173450314b4c25b1d0c63c5ce258ee0ee9ac0f16" >> .env.test
           # Ajoutez ici d'autres variables nécessaires attendues par votre config/Zod
 
+      - name: Wait for services to stabilize
+        run: sleep 10s
+
       - name: Run tests
         # npm test utilise 'dotenv -e .env.test', donc les variables ci-dessus seront chargées
         run: npm test
