@@ -32,6 +32,8 @@ coverage
 
 # Environment files
 .env*
+!.env.example
+!.env.test
 
 
 # IDE config files
