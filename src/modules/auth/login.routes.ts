@@ -281,6 +281,7 @@ export default class LoginRouter extends BaseRouter {
         userId,
         password,
         referer,
+        sendConfirmationEmail: false,
       }),
     );
   }

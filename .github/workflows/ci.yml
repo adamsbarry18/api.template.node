@@ -2,9 +2,9 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ "main", "dev" ]
+    branches: ['main', 'dev']
   pull_request:
-    branches: [ "main", "dev" ]
+    branches: ['main', 'dev']
   # Permet le déclenchement manuel du job 'deploy' depuis l'interface GitHub Actions
   workflow_dispatch:
 
@@ -20,54 +20,50 @@ jobs:
         node-version: [20.x]
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ matrix.node-version }}
-        cache: 'npm'
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
 
-    - name: Install dependencies
-      run: npm ci
+      - name: Install dependencies
+        run: npm ci
 
-    # Optionnel: Linting/Formatting
-    # - name: Lint code
-    #   run: npm run lint
-    # - name: Check formatting
-    #   run: npm run format:check
+      # Optionnel: Linting/Formatting
+      # - name: Lint code
+      #   run: npm run lint
+      # - name: Check formatting
+      #   run: npm run format:check
 
-    - name: Start test services
-      run: docker compose -f src/tests/docker-compose.yml up -d
+      - name: Start test services
+        # Utilise --wait pour attendre que les conteneurs avec healthcheck soient sains (mysql-test, redis-test)
+        run: docker compose -f src/tests/docker-compose.yml up -d --wait
 
-    - name: Wait for services
-      run: |
-        echo "Waiting for database..."
-        retries=20
-        # Remplacez 'db' par le nom de votre service DB dans src/tests/docker-compose.yml si nécessaire
-        until docker compose -f src/tests/docker-compose.yml exec -T db mysqladmin ping -h "localhost" --silent || [ $retries -eq 0 ]; do
-          echo "Waiting... ($retries retries left)"
-          sleep 5
-          ((retries--))
-        done
-        if [ $retries -eq 0 ]; then
-          echo "Database did not start in time."
-          docker compose -f src/tests/docker-compose.yml logs
-          exit 1
-        fi
-        echo "Database is ready!"
+      # L'étape "Wait for services" manuelle n'est plus nécessaire grâce à --wait
 
-    - name: Run tests
-      run: npm test
-      env:
-        CI: true
-        # Assurez-vous que les variables d'env pointent vers les services docker-compose
-        # (ex: DB_HOST=localhost, DB_PORT=port_exposé_par_compose)
+      - name: Run tests
+        run: npm test
+        env:
+          CI: true
+          # Variables d'environnement pour connecter les tests (exécutés sur l'hôte) aux services Docker
+          # via localhost et les ports exposés dans docker-compose.yml
+          DB_HOST: localhost
+          DB_PORT: 3307
+          DB_USER: test_user
+          DB_PASSWORD: test_pwd
+          DB_DATABASE: test_db
+          REDIS_HOST: localhost
+          REDIS_PORT: 6380
+          # MAIL_HOST et MAIL_PORT si vos tests envoient des emails et les vérifient via MailHog
+          MAIL_HOST: localhost
+          MAIL_PORT: 1025
 
-    - name: Stop test services
-      if: always()
-      run: docker compose -f src/tests/docker-compose.yml down -v
+      - name: Stop test services
+        if: always()
+        run: docker compose -f src/tests/docker-compose.yml down -v
 
   # ==========================================
   # Job: Build and Push Docker Image

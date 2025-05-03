@@ -328,8 +328,9 @@ export class PasswordService {
     email?: string;
     password: string;
     referer?: string;
+    sendConfirmationEmail?: boolean;
   }): Promise<boolean> {
-    const { userId, email, password, referer } = params;
+    const { userId, email, password, referer, sendConfirmationEmail = true } = params;
     if (!userId && !email) throw new NotFoundError('userId or email have to be provided');
     let user: User | null = null;
     if (userId) {
@@ -352,13 +353,15 @@ export class PasswordService {
     if (isSame) throw new BadRequestError('New password must be different from the old one');
 
     const hashedPassword = await this.hashPassword(password);
-    await this.userRepository.updatePasswordAndStatus(
-      user.id,
-      hashedPassword,
-      PasswordStatus.VALIDATING,
-    );
-
-    await this.sendPasswordConfirmationEmail(user, referer);
+    const newStatus = sendConfirmationEmail ? PasswordStatus.VALIDATING : PasswordStatus.ACTIVE;
+    await this.userRepository.updatePasswordAndStatus(user.id, hashedPassword, newStatus);
+    if (sendConfirmationEmail) {
+      await this.sendPasswordConfirmationEmail(user, referer);
+    } else {
+      logger.info(
+        `Password updated directly to ACTIVE for user ${user.id}. No confirmation email sent.`,
+      );
+    }
 
     return true;
   }
