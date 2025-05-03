@@ -44,22 +44,25 @@ jobs:
 
       # L'étape "Wait for services" manuelle n'est plus nécessaire grâce à --wait
 
+      - name: Create .env.test file for Vitest
+        run: |
+          echo "NODE_ENV=test" > .env.test
+          echo "CI=true" >> .env.test
+          echo "DB_HOST=localhost" >> .env.test
+          echo "DB_PORT=3307" >> .env.test
+          echo "DB_USERNAME=test_user" >> .env.test
+          echo "DB_PASSWORD=test_pwd" >> .env.test
+          echo "DB_NAME=test_db" >> .env.test
+          echo "REDIS_HOST=localhost" >> .env.test
+          echo "REDIS_PORT=6380" >> .env.test
+          echo "MAIL_HOST=localhost" >> .env.test
+          echo "MAIL_PORT=1025" >> .env.test
+          echo "JWT_SECRET=test-secret-for-ci" >> .env.test
+          # Ajoutez ici d'autres variables nécessaires attendues par votre config/Zod
+
       - name: Run tests
+        # npm test utilise 'dotenv -e .env.test', donc les variables ci-dessus seront chargées
         run: npm test
-        env:
-          CI: true
-          # Variables d'environnement pour connecter les tests (exécutés sur l'hôte) aux services Docker
-          # via localhost et les ports exposés dans docker-compose.yml
-          DB_HOST: localhost
-          DB_PORT: 3307
-          DB_USER: test_user
-          DB_PASSWORD: test_pwd
-          DB_DATABASE: test_db
-          REDIS_HOST: localhost
-          REDIS_PORT: 6380
-          # MAIL_HOST et MAIL_PORT si vos tests envoient des emails et les vérifient via MailHog
-          MAIL_HOST: localhost
-          MAIL_PORT: 1025
 
       - name: Stop test services
         if: always()
