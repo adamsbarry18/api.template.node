@@ -69,6 +69,11 @@ jobs:
     if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') && github.event_name == 'push'
     needs: test
 
+    # Accorde les permissions nécessaires pour lire le contenu et écrire des packages (images Docker)
+    permissions:
+      contents: read # Nécessaire pour actions/checkout
+      packages: write # Nécessaire pour pusher vers GHCR
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
