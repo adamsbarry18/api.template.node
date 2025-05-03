@@ -42,23 +42,6 @@ jobs:
         # Utilise --wait pour attendre que les conteneurs avec healthcheck soient sains (mysql-test, redis-test)
         run: docker compose -f src/tests/docker-compose.yml up -d --wait
 
-      - name: Create .env.test file for Vitest
-        run: |
-          echo "NODE_ENV=test" > .env.test
-          echo "CI=true" >> .env.test
-          echo "DB_HOST=127.0.0.1" >> .env.test # Le runner accède via localhost
-          echo "DB_PORT=3307" >> .env.test # Utiliser le port externe mappé sur l'hôte
-          echo "DB_USERNAME=test_user" >> .env.test
-          echo "DB_PASSWORD=test_pwd" >> .env.test
-          echo "DB_NAME=test_db" >> .env.test
-          echo "REDIS_HOST=127.0.0.1" >> .env.test # Le runner accède via localhost
-          echo "REDIS_PORT=6380" >> .env.test # Utiliser le port externe mappé sur l'hôte
-          echo "MAIL_HOST=127.0.0.1" >> .env.test # Le runner accède via localhost
-          echo "MAIL_PORT=1025" >> .env.test
-          # Utilisation d'un secret plus long pour satisfaire la validation (min 32 caractères)
-          echo "JWT_SECRET=88c7837c9f16943d92d17e3b173450314b4c25b1d0c63c5ce258ee0ee9ac0f16" >> .env.test
-          # Ajoutez ici d'autres variables nécessaires attendues par votre config/Zod
-
       - name: Wait for services to stabilize
         run: sleep 10s
 
