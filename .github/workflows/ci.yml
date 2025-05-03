@@ -40,7 +40,7 @@ jobs:
 
       - name: Start test services
         # Utilise --wait pour attendre que les conteneurs avec healthcheck soient sains (mysql-test, redis-test)
-        run: docker compose -f src/tests/docker-compose.yml up -d --wait
+        run: docker compose -f src/tests/docker-compose.yml up -d
 
       # L'étape "Wait for services" manuelle n'est plus nécessaire grâce à --wait
 
