@@ -110,7 +110,8 @@ export class PasswordService {
         CONFIRM_CODE_EXPIRE_SECONDS,
         user.id.toString(),
       );
-      const confirmationUrl = `${url}/confirm-password?code=${code}`;
+      // Format URL pour createWebHashHistory: http://host/#/path?query
+      const confirmationUrl = `${url}/#/confirm-password?code=${code}`;
       const language = user.preferences?.language || 'en';
       const { subject, html } = this.renderPasswordEmailTemplate(
         'passwordConfirmation',
@@ -159,7 +160,8 @@ export class PasswordService {
         CONFIRM_CODE_EXPIRE_SECONDS,
         user.id.toString(),
       );
-      const resetUrl = `${url}/reset-password?code=${code}`;
+      // Format URL pour createWebHashHistory: http://host/#/path?query
+      const resetUrl = `${url}/#/reset-password?code=${code}`;
       const lang = language || user.preferences?.language || 'en';
       const { subject, html } = this.renderPasswordEmailTemplate(
         'passwordReset',
