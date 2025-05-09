@@ -1,5 +1,5 @@
 # ---- Dependencies (pour dev/test) ----
-FROM node:20-alpine AS dependencies
+FROM node:22-alpine AS dependencies
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
@@ -10,7 +10,7 @@ FROM dependencies AS builder
 RUN npm run build
 
 # ---- Production ----
-FROM node:20-alpine
+FROM node:22-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NODE_OPTIONS="--enable-source-maps"
