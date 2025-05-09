@@ -14,8 +14,8 @@ describe('Authorization API', () => {
       .set('Authorization', `Bearer ${adminToken}`)
       .send({
         email: testEmail,
-        name: 'AuthTest',
-        surname: 'User',
+        firstName: 'AuthTest',
+        lastName: 'User',
         password: 'TotoLeTesteur1!',
         level: 1,
       });

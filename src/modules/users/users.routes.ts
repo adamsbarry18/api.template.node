@@ -46,9 +46,9 @@ export default class UserRouter extends BaseRouter {
   @Get('/users')
   @authorize({ level: SecurityLevel.ADMIN })
   @paginate()
-  @sortable(['id', 'email', 'name', 'surname', 'createdAt'])
+  @sortable(['id', 'email', 'firstName', 'lastName', 'createdAt'])
   @filterable(['level', 'internal', 'email'])
-  @searchable(['email', 'name', 'surname'])
+  @searchable(['email', 'firstName', 'lastName'])
   async getAllUsers(req: Request, res: Response, next: NextFunction): Promise<void> {
     await this.pipe(res, req, next, () =>
       this.usersService.findAll({

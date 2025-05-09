@@ -32,7 +32,7 @@ const createAndLoginUser = async (
   const userRes = await request(app)
     .post('/api/v1/users')
     .set('Authorization', `Bearer ${adminToken}`)
-    .send({ email, name: 'Test', surname: 'User', password, level });
+    .send({ email, firstName: 'Test', lastName: 'User', password, level });
 
   if (userRes.status === 201) {
     userId = userRes.body.data.id;
@@ -88,8 +88,8 @@ describe('Users API', () => {
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           email: userMail,
-          name: 'Main',
-          surname: 'Test',
+          firstName: 'Main',
+          lastName: 'Test',
           color: '#FAFAFA',
           password: 'PasswordMain1!',
           level: SecurityLevel.USER,
@@ -129,8 +129,8 @@ describe('Users API', () => {
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           email: userMail,
-          name: 'duplicate',
-          surname: 'test',
+          firstName: 'duplicate',
+          lastName: 'test',
           password: 'Password1!',
           level: SecurityLevel.READER,
         });
@@ -148,8 +148,8 @@ describe('Users API', () => {
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           email: inactiveUserEmail,
-          name: 'Inactive',
-          surname: 'User',
+          firstName: 'Inactive',
+          lastName: 'User',
           password: 'PasswordInactive1!',
           level: SecurityLevel.READER,
           isActive: false,
@@ -172,8 +172,8 @@ describe('Users API', () => {
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           email: defaultActiveUserEmail,
-          name: 'DefaultActive',
-          surname: 'User',
+          firstName: 'DefaultActive',
+          lastName: 'User',
           password: 'PasswordDefault1!',
           level: SecurityLevel.READER,
           // isActive and permissionsExpireAt are omitted to test defaults
@@ -194,8 +194,8 @@ describe('Users API', () => {
         .set('Authorization', `Bearer ${userToken}`)
         .send({
           email: `forbidden-${uid}@mailtrap.com`,
-          name: 'forbidden',
-          surname: 'user',
+          firstName: 'forbidden',
+          lastName: 'user',
           password: 'Password1!',
           level: SecurityLevel.READER,
         });
@@ -233,8 +233,8 @@ describe('Users API', () => {
       expect(Array.isArray(users)).toBe(true);
       for (const entry of users) {
         expect(entry).toHaveProperty('email');
-        expect(entry).toHaveProperty('name');
-        expect(entry).toHaveProperty('surname');
+        expect(entry).toHaveProperty('firstName');
+        expect(entry).toHaveProperty('lastName');
         expect(entry).toHaveProperty('level');
         expect(entry).toHaveProperty('isActive');
         expect(entry).toHaveProperty('permissionsExpireAt');
@@ -280,8 +280,8 @@ describe('Users API', () => {
       const entry = res.body.data;
       expect(entry.id).toBe(createdUserId);
       expect(entry.email).toBe(userMail);
-      expect(entry.name).toBe('Main');
-      expect(entry.surname).toBe('Test');
+      expect(entry.firstName).toBe('Main');
+      expect(entry.lastName).toBe('Test');
       expect(entry.color).toBe('#FAFAFA');
       expect(entry.level).toBe(SecurityLevel.USER);
       expect(entry.isActive).toBe(true);
@@ -337,8 +337,8 @@ describe('Users API', () => {
       const entry = res.body.data;
       expect(entry.id).toBe(createdUserId);
       expect(entry.email).toBe(userMail);
-      expect(entry.name).toBe('Main');
-      expect(entry.surname).toBe('Test');
+      expect(entry.firstName).toBe('Main');
+      expect(entry.lastName).toBe('Test');
       expect(entry.color).toBe('#FAFAFA');
       expect(entry.level).toBe(SecurityLevel.USER);
       expect(entry.isActive).toBe(true);
@@ -384,8 +384,8 @@ describe('Users API', () => {
       expect(res.body.status).toBe('success');
       expect(res.body.data).toHaveProperty('email', 'user.test1@example.com');
       expect(res.body.data).toHaveProperty('id');
-      expect(res.body.data).toHaveProperty('name');
-      expect(res.body.data).toHaveProperty('surname');
+      expect(res.body.data).toHaveProperty('firstName');
+      expect(res.body.data).toHaveProperty('lastName');
       expect(res.body.data).not.toHaveProperty('password');
     });
 
@@ -412,7 +412,7 @@ describe('Users API', () => {
       const res = await request(app)
         .put('/api/v1/users/-1')
         .set('Authorization', `Bearer ${adminToken}`)
-        .send({ name: 'fail' });
+        .send({ firstName: 'fail' });
       expect(res.status).toBe(404);
       expect(res.body.status).toBe('fail');
     });
@@ -421,14 +421,14 @@ describe('Users API', () => {
         .put(`/api/v1/users/${createdUserId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
-          name: 'editedname',
+          firstName: 'editedFirstName',
           preferences: { hello: 'world', hasOnboarding: true },
           isActive: false,
           permissionsExpireAt: null,
         });
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('success');
-      expect(res.body.data.name).toBe('editedname');
+      expect(res.body.data.firstName).toBe('editedFirstName');
       expect(res.body.data.preferences).toHaveProperty('hasOnboarding', true);
       expect(res.body.data.isActive).toBe(false);
       expect(res.body.data.permissionsExpireAt).toBeNull();
@@ -456,17 +456,17 @@ describe('Users API', () => {
       const res = await request(app)
         .put(`/api/v1/users/${standardUserId}`)
         .set('Authorization', `Bearer ${userToken}`)
-        .send({ name: 'editedStandardName' });
+        .send({ firstName: 'editedStandardFirstName' });
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('success');
-      expect(res.body.data.name).toBe('editedStandardName');
+      expect(res.body.data.firstName).toBe('editedStandardFirstName');
     });
 
     it('should fail to edit another user from valid id (as standard user)', async () => {
       const res = await request(app)
         .put(`/api/v1/users/${createdUserId}`)
         .set('Authorization', `Bearer ${userToken}`)
-        .send({ name: 'forbiddenEdit' });
+        .send({ firstName: 'forbiddenEdit' });
       expect(res.status).toBe(403);
       expect(res.body.status).toBe('fail');
     });
@@ -475,7 +475,7 @@ describe('Users API', () => {
       const res = await request(app)
         .put(`/api/v1/users/${readerUserId}`)
         .set('Authorization', `Bearer ${readerToken}`)
-        .send({ name: 'forbiddenReaderEdit' });
+        .send({ firstName: 'forbiddenReaderEdit' });
       expect(res.status).toBe(403);
       expect(res.body.status).toBe('fail');
     });
@@ -488,7 +488,7 @@ describe('Users API', () => {
       expect(res.body.status).toBe('success');
       const entry = res.body.data;
       expect(entry.id).toBe(createdUserId);
-      expect(entry.name).toBe('editedname');
+      expect(entry.firstName).toBe('editedFirstName');
       expect(entry.preferences).toHaveProperty('hello', 'world');
       expect(entry.preferences).toHaveProperty('hasOnboarding', true);
     });
@@ -552,8 +552,8 @@ describe('Users API', () => {
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           email: `resetpref-main-${uid}@mailtrap.com`,
-          name: 'ResetPrefMain',
-          surname: 'User',
+          firstName: 'ResetPrefMain',
+          lastName: 'User',
           password: 'TotoLeTesteur1!',
           level: SecurityLevel.READER,
         });
@@ -624,8 +624,8 @@ describe('Users API', () => {
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           email: prefTestUserMail,
-          name: 'PrefKey',
-          surname: 'Test',
+          firstName: 'PrefKey',
+          lastName: 'Test',
           password: 'Password123!',
           level: SecurityLevel.USER,
           preferences: { initial: 'value', nested: { deep: true } },
@@ -760,8 +760,8 @@ describe('Users API', () => {
       .set('Authorization', `Bearer ${adminToken}`)
       .send({
         email: `tempdel-${uid}@mailtrap.com`,
-        name: 'Temp',
-        surname: 'Delete',
+        firstName: 'Temp',
+        lastName: 'Delete',
         password: 'Password1!',
         level: SecurityLevel.READER,
       });
@@ -794,8 +794,8 @@ describe('Users API', () => {
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           email: zombieUserMail,
-          name: 'Jean',
-          surname: 'NotDead',
+          firstName: 'Jean',
+          lastName: 'NotDead',
           password: 'TotoLeTesteur1!',
           level: SecurityLevel.USER,
         });
@@ -824,8 +824,8 @@ describe('Users API', () => {
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           email: zombieUserMail,
-          name: 'Monique',
-          surname: 'Zombie',
+          firstName: 'Monique',
+          lastName: 'Zombie',
           password: 'TotoLeTesteur1!',
           level: SecurityLevel.USER,
         });
@@ -841,7 +841,7 @@ describe('Users API', () => {
       expect(res.body.status).toBe('success');
       const user = res.body.data;
       expect(user.id).toBe(zombieUserId);
-      expect(user.name).toBe('Monique');
+      expect(user.firstName).toBe('Monique');
     });
   });
 });

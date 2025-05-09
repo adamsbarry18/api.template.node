@@ -1,12 +1,12 @@
 export const userSchemas = {
   UserInput: {
     type: 'object',
-    required: ['email', 'password', 'name', 'level'],
+    required: ['email', 'password', 'firstname', 'level'],
     properties: {
       email: { type: 'string', format: 'email' },
       password: { type: 'string', minLength: 8 },
-      name: { type: 'string' },
-      surname: { type: 'string', nullable: true },
+      firstname: { type: 'string' },
+      lastname: { type: 'string', nullable: true },
       level: { type: 'integer', minimum: 0, maximum: 5 },
       internalLevel: { type: 'integer', minimum: 0 },
       internal: { type: 'boolean' },
@@ -26,8 +26,8 @@ export const userSchemas = {
     type: 'object',
     properties: {
       password: { type: 'string', minLength: 8 },
-      name: { type: 'string' },
-      surname: { type: 'string', nullable: true },
+      firstname: { type: 'string' },
+      lastname: { type: 'string', nullable: true },
       level: { type: 'integer', minimum: 0, maximum: 5 },
       internalLevel: { type: 'integer', minimum: 0 },
       internal: { type: 'boolean' },
@@ -49,8 +49,8 @@ export const userSchemas = {
       id: { type: 'integer' },
       uid: { type: 'string', nullable: true },
       email: { type: 'string', format: 'email' },
-      name: { type: 'string', nullable: true },
-      surname: { type: 'string', nullable: true },
+      firstname: { type: 'string', nullable: true },
+      lastname: { type: 'string', nullable: true },
       level: { type: 'integer' },
       internalLevel: { type: 'integer' },
       internal: { type: 'boolean' },

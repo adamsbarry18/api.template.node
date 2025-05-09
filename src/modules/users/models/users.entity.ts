@@ -29,8 +29,8 @@ export type AuthorisationRule =
 export type CreateUserInput = {
   email: string;
   password: string;
-  name: string;
-  surname?: string | null;
+  firstName: string;
+  lastName?: string | null;
   level: number;
   internalLevel?: number;
   internal?: boolean;
@@ -51,8 +51,8 @@ export type UserApiResponse = {
   id: number;
   uid: string | null;
   email: string;
-  name: string | null;
-  surname: string | null;
+  firstName: string | null;
+  lastName: string | null;
   level: number;
   internalLevel: number;
   internal: boolean;
@@ -97,11 +97,11 @@ export class User extends Model {
   password!: string;
 
   // Définition du nom comme obligatoire
-  @Column({ type: 'varchar', length: 200 })
-  name!: string;
+  @Column({ type: 'varchar', length: 200, name: 'first_name' })
+  firstName!: string;
 
-  @Column({ type: 'varchar', length: 200, nullable: true })
-  surname: string | null = null;
+  @Column({ type: 'varchar', length: 200, nullable: true, name: 'last_name' })
+  lastName: string | null = null;
 
   @Column({ type: 'int', default: 0 })
   level: number = 0;
@@ -173,8 +173,8 @@ export class User extends Model {
       updatedAt: base.updatedAt,
       uid: this.uid,
       email: this.email,
-      name: this.name,
-      surname: this.surname,
+      firstName: this.firstName,
+      lastName: this.lastName,
       level: this.level,
       internalLevel: this.internalLevel,
       internal: this.internal,
@@ -211,9 +211,9 @@ export class User extends Model {
         .string({ required_error: 'Email is required.' })
         .email({ message: 'Invalid email address format.' })
         .min(1, { message: 'Email cannot be empty.' }),
-      name: z
-        .string({ required_error: 'Name is required.' })
-        .min(1, { message: 'Name cannot be empty.' }),
+      firstName: z
+        .string({ required_error: 'Firstname is required.' })
+        .min(1, { message: 'Firstname cannot be empty.' }),
       level: z
         .number({ required_error: 'Level is required.' })
         .int({ message: 'Level must be an integer.' })
