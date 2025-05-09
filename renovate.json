@@ -43,10 +43,10 @@
        "description": "Add dependencies and renovate labels to all other major PRs",
        "labels": ["dependencies", "renovate", "major"],
        "matchUpdateTypes": ["major"],
+       "matchDatasources": ["npm"],
        "excludePackageNames": [
            "node", "@types/node", "typescript", "typeorm", "mysql2", "pg", "pg-hstore"
        ],
-       "excludeDatasources": ["docker", "github-action"]
     }
   ],
   "prConcurrentLimit": 10,
