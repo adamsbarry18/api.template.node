@@ -3,8 +3,10 @@ name: CI/CD Pipeline
 on:
   push:
     branches: ['main', 'dev']
+  # AJOUTEZ OU ASSUREZ-VOUS QUE CE BLOC EST PRÉSENT
   pull_request:
     branches: ['main', 'dev']
+    # types: [opened, reopened, synchronize, ready_for_review] # Vous pouvez affiner les types si besoin
   # Permet le déclenchement manuel du job 'deploy' depuis l'interface GitHub Actions
   workflow_dispatch:
 
@@ -17,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [20.x]
+        node-version: [22.x]
 
     steps:
       - name: Checkout repository

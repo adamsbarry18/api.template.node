@@ -1,0 +1,35 @@
+# .github/workflows/renovate.yml
+name: Renovate
+
+on:
+  # Exécuter le workflow selon un planning (par exemple, tous les lundis à 4h du matin UTC)
+  schedule:
+    - cron: '0 4 * * 1'
+  # Permettre l'exécution manuelle du workflow depuis l'interface GitHub
+  workflow_dispatch:
+
+# Définir les permissions nécessaires pour le token GITHUB_TOKEN
+# 'contents: write' pour Renovate pour créer des branches et commiter
+# 'pull-requests: write' pour créer et gérer les Pull Requests
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  renovate:
+    runs-on: ubuntu-latest # Peut utiliser un runner auto-hébergé si nécessaire
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4 # Utilise une action GitHub pour cloner le dépôt
+
+      - name: Run Renovate
+        # Utilise l'action officielle de Renovate pour GitHub
+        # @v3 est stable, vous serez notifié par Renovate lui-même s'il y a une nouvelle version de cette action !
+        uses: renovatebot/github-action@v3
+        env:
+          # Le GITHUB_TOKEN est fourni par GitHub Actions et a les permissions définies ci-dessus
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Si vous avez des dépendances privées sur npm ou un autre registre qui nécessitent une authentification spéciale,
+          # vous devrez configurer des secrets et les passer ici (ex: NPM_TOKEN: ${{ secrets.NPM_TOKEN }}).
+          # Renovate a des options pour gérer l'authentification aux registres privés.
