@@ -1,5 +1,5 @@
 import { type JwtPayload } from 'jsonwebtoken';
-import { type UserApiResponse } from '@/modules/users/models/users.entity';
+import { type User as UserEntity } from '@/modules/users/models/users.entity';
 
 import { type IJSendHelper } from '../common/middleware/JSend';
 import {
@@ -14,13 +14,12 @@ declare global {
   namespace Express {
     /**
      * @interface User
-     * @extends UserApiResponse
+     * @extends UserEntity
      * @description Interface augmentation for Express.User to include custom properties.
      *              Based on UserApiResponse for DTO-like structure, plus auth-specific fields.
      */
-    interface User extends UserApiResponse {
-      id: number;
-      sub: number;
+    interface User extends UserEntity {
+      sub?: number;
       authToken?: string | null;
       token?: JwtPayload;
       tokenClientId?: string;

@@ -7,7 +7,7 @@
     "dev": "tsx watch -r tsconfig-paths/register src/server.ts",
     "build": "npm run lint && tsc && tsc-alias",
     "prod": "cross-env NODE_ENV=production node dist/server.js",
-    "lint": "eslint . --cache",
+    "lint": "rimraf dist && eslint . --cache",
     "lint:fix": "eslint . --fix --cache",
     "format": "prettier --write \"src/**/*.ts\" \"*.{js,json,md}\"",
     "clean": "rimraf dist && mkdir dist",
@@ -95,7 +95,7 @@
     "vitest": "^3.1.1"
   },
   "volta": {
-    "node": "20.19.0",
+    "node": "23.11.0",
     "npm": "11.2.0"
   },
   "engines": {
