@@ -106,9 +106,10 @@ export default class AuthorizationRouter extends BaseRouter {
 
   /**
    * @openapi
-   * /authorization/users/{userId}/temporary:
+   * /authorization/users/{userId}/status:
    *   post:
-   *     summary: Create temporary authorization for a user
+   *     summary: Update user status (active, expiration, level)
+   *     description: Allows an administrator to activate/deactivate a user, set or remove their permission expiration date, and optionally change their security level.
    *     tags:
    *       - Authorization
    *     security:
@@ -129,26 +130,38 @@ export default class AuthorizationRouter extends BaseRouter {
    *               expire:
    *                 type: string
    *                 format: date-time
+   *                 nullable: true
+   *                 description: The date and time when the user's permissions expire. Set to null to remove expiration.
    *               level:
    *                 type: integer
+   *                 description: Optional new security level for the user.
+   *               isActive:
+   *                 type: boolean
+   *                 description: Set to true to activate the user, false to deactivate.
    *     responses:
    *       200:
-   *         description: Temporary authorization created
+   *         description: User status updated successfully
+   *       404:
+   *         description: User not found
    */
-  @Post('/authorization/users/:userId/temporary')
+  @Post('/authorization/users/:userId/status')
   @authorize({ level: SecurityLevel.ADMIN })
-  async createTemporaryAuthorization(
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> {
+  async updateUserStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
     const userId = parseInt(req.params.userId, 10);
-    const { expire, level } = req.body;
+    const { expire, level, isActive } = req.body;
+
+    let expireDate: Date | null | undefined = undefined;
+    if (expire === null) {
+      expireDate = null;
+    } else if (expire) {
+      expireDate = new Date(expire);
+    }
 
     await this.pipe(res, req, next, () =>
-      this.authorizationService.createTemporaryAuthorization(userId, {
-        expire: expire ? new Date(expire) : undefined,
+      this.authorizationService.updateUserStatus(userId, {
+        expire: expireDate,
         level: level !== undefined ? parseInt(level, 10) : undefined,
+        isActive: isActive,
       }),
     );
   }
@@ -157,7 +170,8 @@ export default class AuthorizationRouter extends BaseRouter {
    * @openapi
    * /authorization/users/{userId}:
    *   put:
-   *     summary: Update user authorization level and specific permissions
+   *     summary: Update user authorization details (level, permissions, status, expiration)
+   *     description: Allows comprehensive update of a user's authorization settings including their security level, specific permission overrides, active status, and permission expiration date.
    *     tags:
    *       - Authorization
    *     security:
@@ -177,14 +191,22 @@ export default class AuthorizationRouter extends BaseRouter {
    *             properties:
    *               level:
    *                 type: integer
-   *                 description: Optional new security level for the user
+   *                 description: Optional new security level for the user.
    *               permissions:
    *                 type: object
    *                 nullable: true
-   *                 description: Optional specific permission overrides. Maps feature names to arrays of allowed action names. Set to null to remove overrides.
+   *                 description: Optional specific permission overrides. Maps feature names to arrays of allowed action names. Set to null to remove all overrides.
    *                 example:
    *                   user: ['read', 'write']
    *                   config: ['read']
+   *               isActive:
+   *                 type: boolean
+   *                 description: Optional. Set to true to activate the user, false to deactivate.
+   *               permissionsExpireAt:
+   *                 type: string
+   *                 format: date-time
+   *                 nullable: true
+   *                 description: Optional. The date and time when the user's permissions expire. Set to null to remove expiration.
    *     responses:
    *       200:
    *         description: Authorization updated successfully
@@ -195,12 +217,21 @@ export default class AuthorizationRouter extends BaseRouter {
   @authorize({ level: SecurityLevel.ADMIN })
   async updateAuthorization(req: Request, res: Response, next: NextFunction): Promise<void> {
     const userId = parseInt(req.params.userId, 10);
-    const { level, permissions } = req.body;
+    const { level, permissions, isActive, permissionsExpireAt } = req.body;
+
+    let expireDate: Date | null | undefined = undefined;
+    if (permissionsExpireAt === null) {
+      expireDate = null;
+    } else if (permissionsExpireAt) {
+      expireDate = new Date(permissionsExpireAt);
+    }
 
     await this.pipe(res, req, next, () =>
       this.authorizationService.updateAuthorization(userId, {
         level: level !== undefined ? parseInt(level, 10) : undefined,
         permissions,
+        isActive: isActive,
+        permissionsExpireAt: expireDate,
       }),
     );
   }

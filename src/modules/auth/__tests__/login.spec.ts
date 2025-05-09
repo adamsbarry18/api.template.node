@@ -68,6 +68,70 @@ describe('Auth API', () => {
       expect(res.body.data.token).toBeTruthy();
       userToken = res.body.data.token;
     });
+
+    it('should fail to login if user is inactive', async () => {
+      // Ensure user is inactive for this test
+      await request(app)
+        .put(`/api/v1/authorization/users/${testUserId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ isActive: false });
+
+      const res = await request(app)
+        .post('/api/v1/auth/login')
+        .send({ email: testEmail, password: currentPassword });
+      expect(res.status).toBe(401);
+      expect(res.body.message).toBe('Unauthorized');
+      expect(res.body.data).toBe('Account is inactive.');
+
+      // Reactivate user for subsequent tests
+      await request(app)
+        .put(`/api/v1/authorization/users/${testUserId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ isActive: true });
+    });
+
+    it('should fail to login if user permissions have expired', async () => {
+      const pastDate = new Date(Date.now() - 86400000).toISOString(); // 1 day ago
+      // Ensure user permissions are expired
+      await request(app)
+        .put(`/api/v1/authorization/users/${testUserId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ permissionsExpireAt: pastDate });
+
+      const res = await request(app)
+        .post('/api/v1/auth/login')
+        .send({ email: testEmail, password: currentPassword });
+      expect(res.status).toBe(401);
+      expect(res.body.message).toBe('Unauthorized');
+      expect(res.body.data).toBe('Account permissions have expired.');
+
+      // Remove expiration for subsequent tests
+      await request(app)
+        .put(`/api/v1/authorization/users/${testUserId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ permissionsExpireAt: null });
+    });
+
+    it('should login successfully if user permissions have not expired', async () => {
+      const futureDate = new Date(Date.now() + 86400000).toISOString(); // 1 day in future
+      // Ensure user permissions are not expired
+      await request(app)
+        .put(`/api/v1/authorization/users/${testUserId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ permissionsExpireAt: futureDate });
+
+      const res = await request(app)
+        .post('/api/v1/auth/login')
+        .send({ email: testEmail, password: currentPassword });
+      expect(res.status).toBe(200);
+      expect(res.body.data.token).toBeTruthy();
+
+      // Remove expiration for subsequent tests
+      await request(app)
+        .put(`/api/v1/authorization/users/${testUserId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ permissionsExpireAt: null });
+    });
   });
 
   describe('POST /auth/logout', () => {
@@ -77,10 +141,21 @@ describe('Auth API', () => {
     });
 
     it('should logout successfully', async () => {
+      // Ensure user is active before logging in to get the token for logout test
+      await request(app)
+        .put(`/api/v1/authorization/users/${testUserId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ isActive: true });
+
       const loginRes = await request(app)
         .post('/api/v1/auth/login')
         .send({ email: testEmail, password: currentPassword });
-      expect(loginRes.status).toBe(200);
+      // Add a check here to ensure login was successful before proceeding
+      if (loginRes.status !== 200 || !loginRes.body.data.token) {
+        throw new Error(
+          `Login failed before logout test. Status: ${loginRes.status}, Body: ${JSON.stringify(loginRes.body)}`,
+        );
+      }
       const tokenForLogout = loginRes.body.data.token;
 
       const res = await request(app)
@@ -204,10 +279,21 @@ describe('Auth API', () => {
     });
 
     it('should refresh token with valid user', async () => {
+      // Ensure user is active before logging in to get the token for refresh test
+      await request(app)
+        .put(`/api/v1/authorization/users/${testUserId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ isActive: true });
+
       const loginRes = await request(app)
         .post('/api/v1/auth/login')
         .send({ email: testEmail, password: currentPassword });
-      expect(loginRes.status).toBe(200);
+      // Add a check here to ensure login was successful before proceeding
+      if (loginRes.status !== 200 || !loginRes.body.data.token) {
+        throw new Error(
+          `Login failed before refresh token test. Status: ${loginRes.status}, Body: ${JSON.stringify(loginRes.body)}`,
+        );
+      }
       const freshToken = loginRes.body.data.token;
       expect(freshToken).toBeTruthy();
 
@@ -225,6 +311,12 @@ describe('PUT /users/:userId/password', () => {
 
   // Obtenir un token frais avant chaque test de cette suite
   beforeEach(async () => {
+    // Reset user 2 state before getting token
+    await request(app)
+      .put(`/api/v1/authorization/users/${testUserId}`) // testUserId is user 2
+      .set('Authorization', `Bearer ${adminToken}`) // Use admin token to modify
+      .send({ isActive: true, permissionsExpireAt: null }); // Ensure active and not expired
+
     const loginRes = await request(app)
       .post('/api/v1/auth/login')
       .send({ email: testEmail, password: currentPassword });
@@ -329,11 +421,8 @@ describe('PUT /users/:userId/password', () => {
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('success');
     expect(res.body.data).toBe(true);
-
-    // Mettre à jour le mot de passe actuel pour les tests suivants
     currentPassword = newPasswordByAdmin;
 
-    // Vérifier que l'utilisateur peut se logger directement avec le nouveau mot de passe
     const loginAfterAdminUpdate = await request(app)
       .post('/api/v1/auth/login')
       .send({ email: testEmail, password: currentPassword });

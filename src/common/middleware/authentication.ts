@@ -46,7 +46,6 @@ const authorizationService = AuthorizationService.getInstance();
 export function passportAuthenticationMiddleware(): void {
   passport.use(
     new JwtStrategy(options, (req: Request, payload: CustomJwtPayload, done: VerifiedCallback) => {
-      // Fonction interne async pour contenir la logique asynchrone et satisfaire ESLint
       const verify = async (): Promise<void> => {
         const rawToken = ExtractJwt.fromAuthHeaderAsBearerToken()(req);
         if (!rawToken) {
@@ -65,18 +64,53 @@ export function passportAuthenticationMiddleware(): void {
             return;
           }
           const user = await userService.findById(userId);
-          if (user) {
-            const authenticatedUser = { ...user, authToken: rawToken, id: userId, sub: userId };
-            done(null, authenticatedUser);
-          } else {
+
+          if (!user) {
             logger.warn(`User not found (ID: ${userId}) for active token. Invalidating token.`);
             try {
               await loginService.logout(rawToken);
             } catch (err) {
-              logger.error(err, 'Error during automatic token logout.');
+              logger.error(err, 'Error during automatic token logout for non-existent user.');
             }
-            done(null, false, { message: 'User not found or disabled.' });
+            done(null, false, { message: 'User not found.' });
+            return;
           }
+
+          if (!user.isActive) {
+            logger.warn(
+              `Authentication attempt for inactive user ID: ${userId} (${user.email}). Invalidating token.`,
+            );
+            try {
+              await loginService.logout(rawToken);
+            } catch (err) {
+              logger.error(err, 'Error during automatic token logout for inactive user.');
+            }
+            done(null, false, { message: 'Account is inactive.' });
+            return;
+          }
+
+          if (
+            user.permissionsExpireAt &&
+            new Date(user.permissionsExpireAt).getTime() < Date.now()
+          ) {
+            logger.warn(
+              `Authentication attempt for user ID: ${userId} (${user.email}) whose permissions have expired on ${user.permissionsExpireAt}. Invalidating token.`,
+            );
+            try {
+              await loginService.logout(rawToken);
+            } catch (err) {
+              logger.error(err, 'Error during automatic token logout for expired permissions.');
+            }
+            done(null, false, { message: 'Account permissions have expired.' });
+            return;
+          }
+          const authenticatedUser = {
+            ...user,
+            id: userId,
+            sub: userId,
+            authToken: rawToken,
+          };
+          done(null, authenticatedUser);
         } catch (error) {
           if (error instanceof ServiceUnavailableError) {
             done(error, false);

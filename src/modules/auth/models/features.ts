@@ -71,8 +71,6 @@ export const FEATURES_CONFIG = [
   },
   // ... etc
 ];
-
-// Quick access objects (UNCHANGED)
 /**
  * Quick access object for features by name.
  */

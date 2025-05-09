@@ -152,7 +152,7 @@ export class UsersService {
     input: CreateUserInput,
     options?: { requestingUser?: Request['user'] },
   ): Promise<UserApiResponse> {
-    const { password, email, permissions, permissionsExpireAt, ...restData } = input;
+    const { password, email, permissions, permissionsExpireAt, isActive, ...restData } = input;
     if (!email) {
       throw new BadRequestError('Email is required.');
     }
@@ -193,6 +193,7 @@ export class UsersService {
         deletedUser.permissionsExpireAt = permissionsExpireAt
           ? dayjs(permissionsExpireAt).toDate()
           : null;
+        deletedUser.isActive = isActive === undefined ? true : isActive; // Reactivate by default, or use input
         userEntity = deletedUser;
       } else {
         userEntity = this.userRepository.create({
@@ -204,6 +205,7 @@ export class UsersService {
           passwordUpdatedAt: new Date(),
           authorisationOverrides: encodedOverrides,
           permissionsExpireAt: permissionsExpireAt ? dayjs(permissionsExpireAt).toDate() : null,
+          isActive: isActive === undefined ? true : isActive, // Default to true if not provided
         });
       }
       if (!userEntity.isValid()) {
@@ -248,7 +250,7 @@ export class UsersService {
     input: UpdateUserInput,
     options?: { requestingUser?: Request['user'] },
   ): Promise<UserApiResponse> {
-    const { password, permissions, permissionsExpireAt, ...restData } = input;
+    const { password, permissions, permissionsExpireAt, isActive, ...restData } = input;
     const requestingUser = options?.requestingUser;
     if (requestingUser) {
       const isSelf = requestingUser.id === id;
@@ -287,11 +289,31 @@ export class UsersService {
         const expiryDate = permissionsExpireAt ? dayjs(permissionsExpireAt) : null;
         updatePayload.permissionsExpireAt = expiryDate?.isValid() ? expiryDate.toDate() : null;
       }
-      Object.assign(user, updatePayload);
+      if (isActive !== undefined) {
+        updatePayload.isActive = isActive;
+      }
+
+      // Appliquer d'abord les restData, puis les champs spécifiques pour s'assurer qu'ils ne sont pas écrasés par restData si présents
+      Object.assign(user, restData, updatePayload);
+
       if (!user.isValid()) {
         throw new BadRequestError(`User data after update is invalid. ${validationInputErrors}`);
       }
-      const result = await this.userRepository.update(id, updatePayload);
+      // On reconstruit le payload final pour la mise à jour pour éviter de passer des champs non modifiables directement
+      const finalUpdatePayload: Partial<User> = { ...restData };
+      if (updatePayload.password) finalUpdatePayload.password = updatePayload.password;
+      if (updatePayload.passwordUpdatedAt)
+        finalUpdatePayload.passwordUpdatedAt = updatePayload.passwordUpdatedAt;
+      if (updatePayload.passwordStatus)
+        finalUpdatePayload.passwordStatus = updatePayload.passwordStatus;
+      if (updatePayload.authorisationOverrides !== undefined)
+        finalUpdatePayload.authorisationOverrides = updatePayload.authorisationOverrides;
+      if (updatePayload.permissionsExpireAt !== undefined)
+        finalUpdatePayload.permissionsExpireAt = updatePayload.permissionsExpireAt;
+      if (updatePayload.isActive !== undefined)
+        finalUpdatePayload.isActive = updatePayload.isActive;
+
+      const result = await this.userRepository.update(id, finalUpdatePayload);
       if (result.affected === 0) {
         throw new NotFoundError(
           `User with id ${id} not found during update (or no changes applied).`,

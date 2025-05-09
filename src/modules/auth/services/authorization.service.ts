@@ -90,9 +90,20 @@ export class AuthorizationService {
     authorisation: Record<string, string[]>;
     expire: Date | null;
     level: number;
+    isActive: boolean;
   }> {
+    const user = await this.userRepository.findById(userId);
+    if (!user) throw new NotFoundError('User not found');
+
     const permissions = await this.getEffectivePermissions(userId);
-    if (!permissions) throw new NotFoundError('User not found');
+    if (!permissions) {
+      return {
+        authorisation: {},
+        expire: user.permissionsExpireAt,
+        level: user.level,
+        isActive: user.isActive,
+      };
+    }
 
     return {
       authorisation: Object.fromEntries(
@@ -100,48 +111,69 @@ export class AuthorizationService {
       ),
       expire: permissions.expiresAt,
       level: permissions.level,
+      isActive: user.isActive,
     };
   }
 
   /**
-   * Creates a temporary authorization for a user.
+   * Updates a user's status, including activation, expiration, and level.
    * @param userId The user ID.
-   * @param param1 Expiration date and/or security level.
+   * @param params Parameters for updating user status.
    * @returns Success status.
    */
-  async createTemporaryAuthorization(
+  async updateUserStatus(
     userId: number,
-    { expire, level }: { expire?: Date; level?: number },
+    { expire, level, isActive }: { expire?: Date | null; level?: number; isActive?: boolean },
   ): Promise<{ success: boolean }> {
     const user = await this.userRepository.findById(userId);
     if (!user) throw new NotFoundError('User not found');
 
-    user.permissionsExpireAt = expire ?? dayjs().add(3, 'days').toDate();
-    if (level !== undefined) user.level = level;
-    await this.userRepository.save(user);
+    if (expire !== undefined) {
+      user.permissionsExpireAt = expire;
+    }
+    if (level !== undefined) {
+      user.level = level;
+    }
+    if (isActive !== undefined) {
+      user.isActive = isActive;
+    }
 
+    await this.userRepository.save(user);
     await this.invalidateAuthCache(userId);
 
     return { success: true };
   }
 
   /**
-   * Updates a user's authorizations.
+   * Updates a user's authorizations, level, status, and expiration.
    * @param userId The user ID.
-   * @param data Level and/or authorization overrides.
+   * @param data Data for updating user authorizations.
    * @returns Success status.
    */
   async updateAuthorization(
     userId: number,
-    data: { level?: number; permissions?: Record<string, string[]> | null },
+    data: {
+      level?: number;
+      permissions?: Record<string, string[]> | null;
+      isActive?: boolean;
+      permissionsExpireAt?: Date | null;
+    },
   ): Promise<{ success: boolean }> {
     const user = await this.userRepository.findById(userId);
     if (!user) throw new NotFoundError('User not found');
 
-    if (data.level !== undefined) user.level = data.level;
+    if (data.level !== undefined) {
+      user.level = data.level;
+    }
     if (data.permissions !== undefined) {
       user.authorisationOverrides =
         data.permissions === null ? null : this.encodePermissionsToOverrides(data.permissions);
+    }
+    if (data.isActive !== undefined) {
+      user.isActive = data.isActive;
+    }
+    if (data.permissionsExpireAt !== undefined) {
+      user.permissionsExpireAt = data.permissionsExpireAt;
     }
 
     await this.userRepository.save(user);
@@ -179,6 +211,15 @@ export class AuthorizationService {
     featureName: string,
     actionName: string,
   ): Promise<boolean> {
+    const user = await this.userRepository.findById(userId);
+    if (!user) throw new NotFoundError(`User with id ${userId} not found.`);
+    if (!user.isActive) {
+      logger.debug(
+        `Authorization check for User ${userId}: User is inactive. Denying permission for Feature ${featureName}, Action ${actionName}.`,
+      );
+      return false;
+    }
+
     const permissions = await this.getEffectivePermissions(userId);
     const hasPermission =
       permissions?.permissions?.[featureName]?.actions.includes(actionName) || false;
@@ -199,7 +240,12 @@ export class AuthorizationService {
   async checkLevelAccess(userId: number, requiredLevel: SecurityLevel): Promise<boolean> {
     const user = await this.userRepository.findById(userId);
     if (!user) throw new NotFoundError(`User with id ${userId} not found.`);
-
+    if (!user.isActive) {
+      logger.debug(
+        `Level access check for User ${userId}: User is inactive. Denying access regardless of level. Required: ${requiredLevel}.`,
+      );
+      return false;
+    }
     const hasAccess = user.level >= requiredLevel;
 
     logger.debug(
@@ -210,6 +256,38 @@ export class AuthorizationService {
   }
 
   private async getEffectivePermissions(userId: number): Promise<DecodedAuthorisations | null> {
+    const userForStatusCheck = await this.userRepository.findById(userId);
+    if (!userForStatusCheck) {
+      logger.warn(`User with ID ${userId} not found when starting to get effective permissions.`);
+      return null;
+    }
+
+    if (!userForStatusCheck.isActive) {
+      logger.info(`User ${userId} is inactive. No effective permissions will be granted.`);
+      return {
+        userId: userId,
+        level: userForStatusCheck.level,
+        expiresAt: userForStatusCheck.permissionsExpireAt,
+        permissions: {},
+      };
+    }
+
+    if (
+      userForStatusCheck.permissionsExpireAt &&
+      dayjs(userForStatusCheck.permissionsExpireAt).isBefore(dayjs())
+    ) {
+      logger.info(
+        `Permissions for user ${userId} have globally expired at ${userForStatusCheck.permissionsExpireAt.toISOString()}. No effective permissions.`,
+      );
+      await this.invalidateAuthCache(userId);
+      return {
+        userId: userId,
+        level: userForStatusCheck.level,
+        expiresAt: userForStatusCheck.permissionsExpireAt,
+        permissions: {},
+      };
+    }
+
     if (!redisClient?.isReady) {
       logger.warn('Redis unavailable for retrieving authorizations. Calculating directly.');
       return this.calculateEffectivePermissions(userId);
@@ -468,9 +546,6 @@ export class AuthorizationService {
           );
           continue;
         }
-
-        // Combine featureId (16 bits) and mask (16 bits) into a 32-bit integer
-        // Only add if there's a valid mask (even if it's 0, meaning explicit denial of all actions for this feature override)
         const combined = (featureId << 16) | permissionMask;
         parts.push(combined);
       }

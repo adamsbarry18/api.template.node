@@ -9,9 +9,10 @@ import { PasswordStatus, type UserApiResponse } from '@/modules/users/models/use
 import { UsersService } from '@/modules/users/services/users.services';
 
 import { PasswordService } from './password.services';
+import dayjs from 'dayjs';
 
 const REDIS_TOKEN_INVALIDATION_KEY = 'api:users:token_invalidation:{token}';
-const TOKEN_DEFAULT_EXPIRE_SECONDS = 60 * 60 * 24 * 30; // 30 jours
+const TOKEN_DEFAULT_EXPIRE_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
 let instance: LoginService | null = null;
 
@@ -52,6 +53,18 @@ export class LoginService {
     const user = await this.usersService.findByEmailForAuth(normalizedEmail);
     if (!user) {
       throw new UnauthorizedError('Invalid email or password.');
+    }
+
+    if (!user.isActive) {
+      logger.warn(`Login attempt for inactive user ID: ${user.id} (${user.email}).`);
+      throw new UnauthorizedError('Account is inactive.');
+    }
+
+    if (user.permissionsExpireAt && dayjs(user.permissionsExpireAt).isBefore(dayjs())) {
+      logger.warn(
+        `Login attempt for user ID: ${user.id} (${user.email}) whose permissions have expired on ${user.permissionsExpireAt.toISOString()}.`,
+      );
+      throw new UnauthorizedError('Account permissions have expired.');
     }
 
     const isPasswordValid = await user.comparePassword(password);

@@ -94,12 +94,14 @@ describe('Users API', () => {
           password: 'PasswordMain1!',
           level: SecurityLevel.USER,
           preferences: { hello: 'world' },
+          isActive: true,
+          permissionsExpireAt: new Date(Date.now() + 3600000 * 24).toISOString(), // Expires in 24 hours
         });
       if (mainUserRes.status === 201) {
         createdUserId = mainUserRes.body.data.id;
       } else if (
         mainUserRes.status === 400 &&
-        mainUserRes.body?.message?.includes('already exists')
+        mainUserRes.body?.message?.includes('already in use by an active user') // Message d'erreur mis à jour
       ) {
         const getMainUserRes = await request(app)
           .get(`/api/v1/users/${userMail}`)
@@ -134,6 +136,56 @@ describe('Users API', () => {
         });
       expect(res.status).toBe(400);
       expect(res.body.status).toBe('fail');
+      // Adjusting assertion as the specific message might be overridden by error handling
+      expect(res.body.message).toBe('Bad request');
+    });
+
+    it('should create a user with isActive: false and permissionsExpireAt (as admin)', async () => {
+      const inactiveUserEmail = `inactive-${uid}@mailtrap.com`;
+      const expireDate = new Date(Date.now() - 3600000).toISOString(); // Expired 1 hour ago
+      const res = await request(app)
+        .post('/api/v1/users')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          email: inactiveUserEmail,
+          name: 'Inactive',
+          surname: 'User',
+          password: 'PasswordInactive1!',
+          level: SecurityLevel.READER,
+          isActive: false,
+          permissionsExpireAt: expireDate,
+        });
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('success');
+      expect(res.body.data.isActive).toBe(false);
+      expect(new Date(res.body.data.permissionsExpireAt).toISOString()).toBe(expireDate);
+      // Clean up created user
+      await request(app)
+        .delete(`/api/v1/users/${res.body.data.id}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+    });
+
+    it('should create a user with isActive: true by default and null permissionsExpireAt (as admin)', async () => {
+      const defaultActiveUserEmail = `default-active-${uid}@mailtrap.com`;
+      const res = await request(app)
+        .post('/api/v1/users')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          email: defaultActiveUserEmail,
+          name: 'DefaultActive',
+          surname: 'User',
+          password: 'PasswordDefault1!',
+          level: SecurityLevel.READER,
+          // isActive and permissionsExpireAt are omitted to test defaults
+        });
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('success');
+      expect(res.body.data.isActive).toBe(true);
+      expect(res.body.data.permissionsExpireAt).toBeNull();
+      // Clean up created user
+      await request(app)
+        .delete(`/api/v1/users/${res.body.data.id}`)
+        .set('Authorization', `Bearer ${adminToken}`);
     });
 
     it('should fail to create user (as standard user)', async () => {
@@ -184,6 +236,8 @@ describe('Users API', () => {
         expect(entry).toHaveProperty('name');
         expect(entry).toHaveProperty('surname');
         expect(entry).toHaveProperty('level');
+        expect(entry).toHaveProperty('isActive');
+        expect(entry).toHaveProperty('permissionsExpireAt');
         expect(entry).toHaveProperty('createdTime');
         expect(entry).toHaveProperty('updatedTime');
         expect(entry).toHaveProperty('preferences');
@@ -230,6 +284,8 @@ describe('Users API', () => {
       expect(entry.surname).toBe('Test');
       expect(entry.color).toBe('#FAFAFA');
       expect(entry.level).toBe(SecurityLevel.USER);
+      expect(entry.isActive).toBe(true);
+      expect(entry.permissionsExpireAt).not.toBeNull();
       expect(entry).toHaveProperty('createdTime');
       expect(entry).toHaveProperty('updatedTime');
       expect(entry).toHaveProperty('preferences');
@@ -285,6 +341,8 @@ describe('Users API', () => {
       expect(entry.surname).toBe('Test');
       expect(entry.color).toBe('#FAFAFA');
       expect(entry.level).toBe(SecurityLevel.USER);
+      expect(entry.isActive).toBe(true);
+      expect(entry.permissionsExpireAt).not.toBeNull();
       expect(entry).toHaveProperty('createdTime');
       expect(entry).toHaveProperty('updatedTime');
       expect(entry).toHaveProperty('preferences');
@@ -365,11 +423,33 @@ describe('Users API', () => {
         .send({
           name: 'editedname',
           preferences: { hello: 'world', hasOnboarding: true },
+          isActive: false,
+          permissionsExpireAt: null,
         });
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('success');
       expect(res.body.data.name).toBe('editedname');
       expect(res.body.data.preferences).toHaveProperty('hasOnboarding', true);
+      expect(res.body.data.isActive).toBe(false);
+      expect(res.body.data.permissionsExpireAt).toBeNull();
+
+      // Reset isActive and set a new expiration date for other tests
+      const futureExpireDate = new Date(Date.now() + 3600000 * 48).toISOString(); // Expires in 48 hours
+      await request(app)
+        .put(`/api/v1/users/${createdUserId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ isActive: true, permissionsExpireAt: futureExpireDate });
+
+      const checkRes = await request(app)
+        .get(`/api/v1/users/${createdUserId}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(checkRes.body.data.isActive).toBe(true);
+      // Compare timestamps using toBeCloseTo
+      const receivedTimestamp = new Date(checkRes.body.data.permissionsExpireAt).getTime();
+      const expectedTimestamp = new Date(futureExpireDate).getTime();
+      // Use manual comparison with a tolerance (e.g., 500ms)
+      const tolerance = 500; // milliseconds
+      expect(Math.abs(receivedTimestamp - expectedTimestamp)).toBeLessThan(tolerance);
     });
 
     it('should edit own user from valid id (as standard user)', async () => {

@@ -9,7 +9,6 @@ services:
       MYSQL_PASSWORD: test_pwd
     ports:
       - "3307:3306"
-    # Utilisation d'un volume temporaire pour accélérer les tests (pas de persistance disque)
     tmpfs:
       - /var/lib/mysql
     volumes:

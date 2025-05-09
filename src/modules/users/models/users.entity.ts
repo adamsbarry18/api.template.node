@@ -39,6 +39,7 @@ export type CreateUserInput = {
   preferences?: Record<string, any> | null;
   permissions?: Record<string, any> | null;
   permissionsExpireAt?: Date | null;
+  isActive?: boolean;
 };
 
 export type UpdateUserInput = Omit<Partial<CreateUserInput>, 'email'>;
@@ -62,6 +63,7 @@ export type UserApiResponse = {
   passwordUpdatedAt: string | null;
   preferences: Record<string, any> | null;
   permissionsExpireAt: string | null;
+  isActive: boolean;
   createdTime?: Date;
   updatedTime?: Date;
 };
@@ -133,6 +135,9 @@ export class User extends Model {
   @Column({ type: 'timestamp', nullable: true, name: 'permissions_expire_at' })
   permissionsExpireAt: Date | null = null;
 
+  @Column({ type: 'boolean', default: true, name: 'is_active' })
+  isActive: boolean = true;
+
   /**
    * Hash la valeur du password avant insertion / mise à jour dans la BDD.
    */
@@ -178,6 +183,7 @@ export class User extends Model {
       passwordUpdatedAt: Model.formatISODate(this.passwordUpdatedAt),
       preferences: this.preferences,
       permissionsExpireAt: Model.formatISODate(this.permissionsExpireAt),
+      isActive: this.isActive,
     };
 
     delete (res as any).password;
@@ -216,6 +222,7 @@ export class User extends Model {
       password: z
         .string({ required_error: 'Password is required.' })
         .min(1, { message: 'Password cannot be empty.' }),
+      isActive: z.boolean().optional(),
     });
 
     const result = userValidationSchema.safeParse(this);

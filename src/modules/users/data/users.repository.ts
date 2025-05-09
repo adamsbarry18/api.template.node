@@ -45,6 +45,7 @@ const USER_WITH_PASSWORD_FIELDS: (keyof User)[] = [
   'updatedAt',
   'authorisationOverrides',
   'permissionsExpireAt',
+  'isActive',
 ];
 
 // Repository for handling user-related database operations

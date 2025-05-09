@@ -15,6 +15,7 @@ CREATE TABLE `user` (
   `preferences` JSON,
   `authorisation_overrides` VARCHAR(500),
   `permissions_expire_at` TIMESTAMP NULL DEFAULT NULL,
+  `is_active` TINYINT(1) DEFAULT 1,
   `created_time` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_time` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted_time` TIMESTAMP NULL DEFAULT NULL,
