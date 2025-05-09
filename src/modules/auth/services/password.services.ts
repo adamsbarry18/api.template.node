@@ -62,7 +62,7 @@ export class PasswordService {
     language: string = 'fr',
   ): { subject: string; html: string } {
     return renderTemplate(type, language, {
-      name: user.name || '',
+      name: user.lastName || '',
       url: context.url || '',
       app: config.MAIL_FROM || 'MyApp',
     });
