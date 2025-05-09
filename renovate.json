@@ -1,13 +1,13 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended","schedule:weekly","group:recommended"],
+  "extends": ["config:recommended", "schedule:weekly", "group:recommended"],
   "packageRules": [
     {
       "description": "Automerge patch updates if CI passes",
       "matchUpdateTypes": ["patch"],
       "automerge": true,
       "automergeType": "squash",
-      "requiredStatusChecks": null,
+      "ignoreTests": true,
       "labels": ["dependencies", "renovate", "automerge"]
     },
     {
@@ -15,38 +15,46 @@
       "matchUpdateTypes": ["minor"],
       "automerge": true,
       "automergeType": "squash",
-      "requiredStatusChecks": null,
+      "ignoreTests": true,
       "labels": ["dependencies", "renovate", "automerge"]
     },
-     {
-       "description": "Group all non-npm updates (docker, actions, etc.)",
-       "matchDatasources": ["docker", "github-action"],
-       "groupName": "non-npm-dependencies",
-       "labels": ["dependencies", "renovate", "non-npm"],
-       "automerge": false
-     },
-     {
-       "description": "Group major Node.js/TS/TypeORM/DB updates",
-       "matchPackageNames": [
-         "node", "@types/node",
-         "typescript",
-         "typeorm",
-         "mysql2",
-         "pg", "pg-hstore"
-       ],
-       "matchUpdateTypes": ["major"],
-       "groupName": "core-backend-major",
-       "labels": ["dependencies", "renovate", "major", "backend-core"],
-       "automerge": false
-     },
     {
-       "description": "Add dependencies and renovate labels to all other major PRs",
-       "labels": ["dependencies", "renovate", "major"],
-       "matchUpdateTypes": ["major"],
-       "matchDatasources": ["npm"],
-       "excludePackageNames": [
-           "node", "@types/node", "typescript", "typeorm", "mysql2", "pg", "pg-hstore"
-       ],
+      "description": "Group all non-npm updates (docker, actions, etc.)",
+      "matchDatasources": ["docker", "github-action"],
+      "groupName": "non-npm-dependencies",
+      "labels": ["dependencies", "renovate", "non-npm"],
+      "automerge": false
+    },
+    {
+      "description": "Group major Node.js/TS/TypeORM/DB updates",
+      "matchPackageNames": [
+        "node",
+        "@types/node",
+        "typescript",
+        "typeorm",
+        "mysql2",
+        "pg",
+        "pg-hstore"
+      ],
+      "matchUpdateTypes": ["major"],
+      "groupName": "core-backend-major",
+      "labels": ["dependencies", "renovate", "major", "backend-core"],
+      "automerge": false
+    },
+    {
+      "description": "Add dependencies and renovate labels to all other major PRs",
+      "labels": ["dependencies", "renovate", "major"],
+      "matchUpdateTypes": ["major"],
+      "matchDatasources": ["npm"],
+      "matchPackageNames": [
+        "!node",
+        "!@types/node",
+        "!typescript",
+        "!typeorm",
+        "!mysql2",
+        "!pg",
+        "!pg-hstore"
+      ]
     }
   ],
   "prConcurrentLimit": 10,
