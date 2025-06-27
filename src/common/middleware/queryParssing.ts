@@ -118,9 +118,25 @@ export const parseFiltering =
 
     const queryParams = req.query;
 
+    // List of parameters that should never be treated as filters
+    const nonFilterParams = [
+      'page', 
+      'limit', 
+      'sortBy', 
+      'sortOrder', 
+      'q', 
+      'order',
+      'version', // Exclude version parameter
+      'timestamp',
+      'cache',
+      'nocache',
+      'callback',
+      'format'
+    ];
+
     Object.entries(queryParams).forEach(([field, value]) => {
-      // Ignore pagination, sorting, search, and order parameters
-      if (['page', 'limit', 'sortBy', 'sortOrder', 'q', 'order'].includes(field)) {
+      // Ignore pagination, sorting, search, and other non-filter parameters
+      if (nonFilterParams.includes(field)) {
         return;
       }
 
