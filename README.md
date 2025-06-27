@@ -1,91 +1,97 @@
-# Innov Stocker Node
+# API Template Node.js
 
-A modern, modular, and scalable inventory and business management backend for SMEs, built with Node.js, TypeScript, and Express.
+A modern, modular, and scalable RESTful API template for quickly initializing Node.js projects with robust architecture and built-in best practices.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Version](https://img.shields.io/badge/version-0.0.1-green.svg)
+![Node.js](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen.svg)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.8.3-blue.svg)
 
 ---
 
-## 1. 🚀 Introduction
+## 🚀 Introduction
 
-### 1.1 Project Context
+### What is this template?
 
-### 1.2 Project Objectives
+This RESTful API template is designed to **accelerate development** of your Node.js projects by providing a **modular and scalable architecture** ready to use with:
 
-### 1.3 Project Scope
+- ✅ **Complete Authentication** : JWT + OAuth providers (Google)
+- ✅ **Modular Architecture** : Domain-Driven Design (DDD)
+- ✅ **User Management** : Complete CRUD with roles and permissions
+- ✅ **Robust Validation** : Zod for data validation
+- ✅ **Automated Testing** : Complete test suite with Docker
+- ✅ **API Documentation** : Auto-generated Swagger/OpenAPI
+- ✅ **Internationalization** : Multi-language support (EN/FR)
+- ✅ **Enhanced Security** : Security headers, validation, audit
 
-The application covers the following features:
+### Why use this template?
 
-### 1.4 Stakeholders
-
-- **Product Owner / Sponsor:** [To be defined, e.g., Company Management]
-- **End Users:** Employees in purchasing, sales, logistics, finance, store managers
-- **Development Team:** Project managers, analysts, developers, testers, UX/UI designers
-
----
-
-## 2. 📝 Application Overview
-
-### 2.1 Product Philosophy
-
-The application is designed as a complete, intuitive, and high-performance solution for business management. It aims to simplify the inherent complexity of inventory and related operations, offering a clear, aesthetic, and efficient user interface. Automation of repetitive tasks and real-time delivery of relevant information are at the heart of the product philosophy.
-
-### 2.2 Target Audience
-
-The application targets small and medium-sized enterprises (SMEs) across various sectors (retail, distribution, small industry, etc.) needing a robust tool to manage their goods and financial flows.
-
-### 2.3 Technology Stack
-
-- **Backend:** Node.js, TypeScript, Express, TypeORM, Zod, modular DDD structure (models, repositories, services, routes, tests)
-- **Frontend:** Vue.js 3, SCSS, TypeScript, Pinia (state management), reusable components (not included in this repo)
-- **Database:** Relational DBMS (MySQL), NoSQL (Redis)
-- **API:** RESTful architecture for frontend/backend communication and future integrations
-- **Authentication:** OAuth 2.0 and/or JWT (JSON Web Tokens)
-- **Web Server:** Nginx
-- **Hosting:** Cloud solution (e.g., AWS) for scalability and maintainability
+- **Save time** : Ready architecture, no need to configure everything
+- **Best practices** : Structured and maintainable code
+- **Scalable** : Easy to add new modules
+- **Production-ready** : Tests, CI/CD, Docker, monitoring
+- **Documented** : Commented code and complete documentation
 
 ---
 
-## 3. 🛠 Features
+## 🏗️ Architecture
 
-- **Secure Authentication:** JWT-based authentication, OAuth 2.0 ready
-- **Modular Domain-Driven Design:** Clear separation of models, repositories, services, and routes
-- **Comprehensive Inventory Management:** Real-time stock, inventory sessions, alerts, and valuation
-- **Purchase & Sales Automation:** End-to-end workflow from order to invoice
-- **Multi-currency Support:** Manage transactions in multiple currencies
-- **Data Import/Export:** Excel, CSV, and more
-- **Document Generation:** Print quotes, invoices, and orders
-- **Barcode/QR Code Scanning:** For fast item management
-- **Cash Register & Payment Management:** Track all payment types and cash operations
-- **Analytics & Reporting:** Actionable insights for better decision-making
-- **Internationalization:** Ready for English and French (see `/src/locales/emails/`)
+### Modular Structure
 
----
-
-## 4. 🏗️ Project Structure
-
-```bash
-api.template.node/
-├── src/
-│   ├── api/                # API entrypoint and dynamic route registration
-│   ├── app.ts              # Express app setup
-│   ├── common/             # Shared errors, middleware, models, routing, types, utils
-│   ├── config/             # App and HTTP configuration
-│   ├── database/           # Data source and migrations
-│   ├── lib/                # Logger, mailer, openapi schemas, redis
-│   ├── locales/            # Email templates (en, fr)
-│   ├── modules/            # Domain modules (auth, users, products, etc.)
-│   └── tests/              # Test utilities and docker-compose for test DBs
-├── Dockerfile
-├── package.json
-├── README.md
-└── ...
+```
+src/
+├── api/                    # API entry point and dynamic route registration
+├── app.ts                  # Express configuration
+├── common/                 # Shared errors, middleware, models, routing, types, utils
+├── config/                 # App and HTTP configuration
+├── database/               # Data source and migrations
+├── lib/                    # Logger, mailer, openapi schemas, redis
+├── locales/                # Email templates (en, fr)
+├── modules/                # Business modules (auth, users, etc.)
+│   ├── auth/              # JWT + OAuth authentication
+│   ├── users/             # User management
+│   └── [other-modules]/   # New modules to add
+└── tests/                  # Test utilities and docker-compose
 ```
 
+### Architecture Principles
+
+- **Domain-Driven Design (DDD)** : Clear separation of responsibilities
+- **Modularity** : Each module is independent and reusable
+- **Scalability** : Easy to add new modules
+- **Testability** : Unit and integration tests
+- **Security** : Validation, authentication, authorization
+
 ---
 
-## 5. 🚀 Getting Started
+## 🛠️ Features
+
+### 🔐 Authentication & Authorization
+- **JWT Authentication** : Secure tokens with expiration
+- **OAuth 2.0 Providers** : Integrated Google OAuth
+- **Role Management** : Flexible permission system
+- **Enhanced Security** : Security headers, input validation
+
+### 👥 User Management
+- **Complete CRUD** : Create, read, update, delete
+- **User Profiles** : Preferences, metadata
+- **Password Management** : Reset, expiration, complexity
+- **User Status** : Active, inactive, expired
+
+### 🧪 Testing & Quality
+- **Unit Tests** : Vitest + Supertest
+- **Integration Tests** : Test database with Docker
+- **CI/CD** : Automated GitHub Actions pipeline
+- **Linting & Formatting** : ESLint + Prettier
+
+### 📚 Documentation
+- **API Documentation** : Auto-generated Swagger/OpenAPI
+- **Documented Code** : JSDoc and comments
+- **Complete README** : Installation and usage guide
+
+---
+
+## 🚀 Quick Start
 
 ### Prerequisites
 
@@ -94,162 +100,235 @@ node >= 20.0.0
 npm >= 10.0.0
 docker >= 20.0.0
 docker-compose >= 2.0.0
-mysql >= 8.0
-redis >= 7.0
 ```
 
 ### Installation
 
-1. **Clone the repository**
-
+1. **Clone the template**
    ```bash
-   git clone https://github.com/adamsbarry18/api.template.node.git
-   cd api.template.node
+   git clone https://github.com/adamsbarry18/api.template.node.git my-api-project
+   cd my-api-project
    ```
 
 2. **Install dependencies**
-
    ```bash
    npm install
    ```
 
-3. **Set up environment variables**
-
-   Copy the example file and fill in your configuration:
-
+3. **Configure environment**
    ```bash
    cp .env.example .env
+   # Edit .env with your configurations
    ```
 
-   Edit `.env` to match your MySQL, Redis, and other settings.
-
-4. **Run database and cache for development/testing**
-
+4. **Start development services**
    ```bash
    docker compose -f src/tests/docker-compose.yml up -d
    ```
 
-5. **Run the development server**
-
+5. **Start development server**
    ```bash
    npm run dev
    ```
 
-6. **Build for production**
-
-   ```bash
-   npm run build
+6. **Access API documentation**
+   ```
+   http://localhost:8000/api-docs
    ```
 
-7. **Run in production**
+### Testing
 
-   ```bash
-   npm run prod
-   ```
+```bash
+# Complete tests with clean database
+npm run test:all
+
+# Unit tests only
+npm test
+
+# Tests with coverage
+npm run test:coverage
+```
 
 ---
 
-## 6. 🐳 Docker Deployment
-
-### Quick Start
-
-1. **Build the Docker image**
-
-   ```bash
-   docker build -t innov-stocker-app .
-   ```
-
-2. **Run the container with environment variables**
-
-   ```bash
-   docker run --rm --env-file .env -p 8000:8000 innov-stocker-app
-   ```
-
-3. **(Optional) Use Docker Compose for local dev/test**
-
-   ```bash
-   docker compose -f src/tests/docker-compose.yml up -d
-   ```
-
-### Dockerfile
-
-- Multi-stage build for optimized production images
-- Uses `dumb-init` for proper signal handling
-- Exposes port 8000
+## 🔧 Configuration
 
 ### Environment Variables
 
-| Variable      | Description                                       | Required |
-| ------------- | ------------------------------------------------- | -------- |
-| `NODE_ENV`    | Environment (`development`, `production`, `test`) | Yes      |
-| `PORT`        | API port (default: 8000)                          | No       |
-| `DB_TYPE`     | Database type (`mysql`, ...)                      | Yes      |
-| `DB_HOST`     | Database host                                     | Yes      |
-| `DB_PORT`     | Database port                                     | Yes      |
-| `DB_USERNAME` | Database user                                     | Yes      |
-| `DB_PASSWORD` | Database password                                 | Yes      |
-| `DB_NAME`     | Database name                                     | Yes      |
-| `REDIS_URL`   | Redis connection string                           | Yes      |
-| ...           | See `.env.example` for all options                |          |
+| Variable | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `NODE_ENV` | Environment (`development`, `production`, `test`) | ✅ | `development` |
+| `PORT` | API port | ❌ | `8000` |
+| `DB_TYPE` | Database type | ✅ | `mysql` |
+| `DB_HOST` | Database host | ✅ | - |
+| `DB_PORT` | Database port | ✅ | - |
+| `DB_USERNAME` | Database user | ✅ | - |
+| `DB_PASSWORD` | Database password | ✅ | - |
+| `DB_NAME` | Database name | ✅ | - |
+| `JWT_SECRET` | JWT secret key | ✅ | - |
+| `REDIS_URL` | Redis connection URL | ✅ | - |
+
+See `.env.example` for all available options.
+
+### Adding a new module
+
+1. **Create structure**
+   ```bash
+   mkdir -p src/modules/my-module/{models,services,routes,__tests__}
+   ```
+
+2. **Create entity**
+   ```typescript
+   // src/modules/my-module/models/my-module.entity.ts
+   import { Entity, Column } from 'typeorm';
+   import { Model } from '@/common/models/Model';
+
+   @Entity({ name: 'my_module' })
+   export class MyModule extends Model {
+     @Column({ type: 'varchar', length: 100 })
+     name!: string;
+   }
+   ```
+
+3. **Add routes**
+   ```typescript
+   // src/modules/my-module/routes/my-module.routes.ts
+   import { Router } from 'express';
+   import { BaseRouter } from '@/common/routing/BaseRouter';
+
+   export class MyModuleRoutes extends BaseRouter {
+     // Implement your routes
+   }
+   ```
+
+4. **Register module**
+   ```typescript
+   // src/modules/my-module/index.ts
+   export * from './models/my-module.entity';
+   export * from './routes/my-module.routes';
+   ```
 
 ---
 
-## 7. 📚 API Documentation
+## 🐳 Deployment
 
-- **Swagger/OpenAPI** available at `/api-docs` when the server is running.
-- Auto-generated from code annotations and OpenAPI schemas.
+### Docker
 
----
+```bash
+# Build image
+docker build -t my-api .
 
-## 8. 🧪 Testing
+# Run with environment variables
+docker run --rm --env-file .env -p 8000:8000 my-api
+```
 
-- **Unit & Integration Tests:**
-  ```bash
-  npm test
-  ```
-- **Test DB Services:**
-  ```bash
-  npm run test-db:start
-  npm run test-db:stop
-  ```
+### Production
 
----
+```bash
+# Build for production
+npm run build
 
-## 9. 🧑‍💻 Code Quality
-
-- **Linting:**
-  ```bash
-  npm run lint
-  ```
-- **Formatting:**
-  ```bash
-  npm run format
-  ```
-- **Pre-commit hooks:** Husky (configured in `package.json`)
+# Run in production
+npm run prod
+```
 
 ---
 
-## 10. 🌍 Internationalization
+## 📚 API Documentation
 
-- English and French email templates in `/src/locales/emails/`
-- Ready for further i18n extension
+- **Swagger UI** : `http://localhost:8000/api-docs`
+- **OpenAPI JSON** : `http://localhost:8000/api-docs.json`
 
----
+### Main Endpoints
 
-## 11. 🔐 Security & Compliance
+#### Authentication
+- `POST /api/v1/auth/login` - JWT login
+- `POST /api/v1/auth/logout` - Logout
+- `GET /api/v1/auth/google` - Google OAuth
 
-- JWT authentication
-- Secure HTTP headers via Helmet
-- Input validation with Zod
-- Audit logging
-- GDPR-compliant data handling
-
----
-
-## 12. 📄 License
-
-This project is licensed under the MIT License.
+#### Users
+- `GET /api/v1/users` - List users
+- `POST /api/v1/users` - Create user
+- `GET /api/v1/users/:id` - Get user details
+- `PUT /api/v1/users/:id` - Update user
+- `DELETE /api/v1/users/:id` - Delete user
 
 ---
 
-**For any questions, contributions, or issues, please open an issue or pull request on [GitHub](https://github.com/adamsbarry18/api.template.node).**
+## 🧪 Testing
+
+### Test Structure
+
+```
+src/modules/
+├── auth/
+│   └── __tests__/
+│       ├── authorization.spec.ts
+│       ├── login.spec.ts
+│       └── password.services.spec.ts
+└── users/
+    └── __tests__/
+        └── users.spec.ts
+```
+
+### Run Tests
+
+```bash
+# Complete tests with clean database
+npm run test:all
+
+# Unit tests
+npm test
+
+# Tests with coverage
+npm run test:coverage
+
+# Local tests (development)
+npm run test:local
+```
+
+---
+
+## 🔐 Security
+
+- **JWT Authentication** : Secure tokens
+- **OAuth 2.0** : Google integration
+- **Input Validation** : Zod for validation
+- **Security Headers** : Helmet.js
+- **CORS Configured** : Cross-origin protection
+- **Rate Limiting** : Attack protection
+- **Audit Logging** : Action traceability
+
+---
+
+## 🌍 Internationalization
+
+- **Email Templates** : EN/FR support
+- **Error Messages** : Multi-language
+- **Ready for Extension** : Easy to add other languages
+
+---
+
+## 🤝 Contributing
+
+1. Fork the project
+2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License. See the `LICENSE` file for details.
+
+---
+
+## 🆘 Support
+
+- **Issues** : [GitHub Issues](https://github.com/adamsbarry18/api.template.node/issues)
+
+---
+
+**⭐ Don't forget to star if this template helped you!**

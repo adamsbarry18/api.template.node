@@ -20,6 +20,27 @@ jobs:
       matrix:
         node-version: [22.x]
 
+    # Variables d'environnement pour les tests
+    env:
+      NODE_ENV: test
+      PORT: 8000
+      DB_TYPE: mysql
+      DB_HOST: localhost
+      DB_PORT: 3306
+      DB_USERNAME: test_user
+      DB_PASSWORD: test_password
+      DB_NAME: test_db
+      JWT_SECRET: test_jwt_secret_key_for_ci_pipeline_only
+      REDIS_URL: redis://localhost:6379
+      GOOGLE_CLIENT_ID: test_google_client_id
+      GOOGLE_CLIENT_SECRET: test_google_client_secret
+      GOOGLE_CALLBACK_URL: http://localhost:8000/api/v1/auth/google/callback
+      MAIL_HOST: localhost
+      MAIL_PORT: 1025
+      MAIL_USER: test@example.com
+      MAIL_PASS: test_password
+      MAIL_FROM: noreply@example.com
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -53,7 +74,7 @@ jobs:
         run: sleep 10s
 
       - name: Run tests
-        # npm test utilise 'dotenv -e .env.test', donc les variables ci-dessus seront chargées
+        # npm test utilise 'dotenv -e .env.test', mais les variables d'environnement du job ont priorité
         run: npm test
 
       - name: Stop test services
