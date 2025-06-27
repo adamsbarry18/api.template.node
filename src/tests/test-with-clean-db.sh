@@ -15,7 +15,7 @@ npm run test-db:start
 
 # Wait for services to be healthy (optional: adjust if needed)
 printf "[TEST] Waiting for services to be healthy...\n"
-sleep 2
+sleep 5
 
 # Run tests
 printf "[TEST] Running tests...\n"

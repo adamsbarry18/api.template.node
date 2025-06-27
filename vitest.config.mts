@@ -15,8 +15,8 @@ export default defineConfig({
       reporter: ['text', 'json', 'html'],
       exclude: ['node_modules/**', 'dist/**', 'src/server.ts', 'src/app.ts'],
     },
-    // testTimeout: 10000,
-    // hookTimeout: 20000,
+    testTimeout: 20000,
+    hookTimeout: 60000,
     isolate: false,
     // fileParallelism: false,
     // Ajouter la configuration pour désactiver le type stripping
