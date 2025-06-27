@@ -13,3 +13,5 @@ export const getOpenAPIComponents = (): { components: { schemas: typeof schemas 
     schemas,
   },
 });
+
+export { userSchemas, authSchemas, authorizationSchemas };

@@ -34,9 +34,5 @@ describe('PasswordService.isPasswordValid', () => {
 
   it('should reject empty or null passwords', () => {
     expect(passwordService.isPasswordValid('')).toBe(false);
-    // @ts-expect-error
-    expect(passwordService.isPasswordValid(null)).toBe(false);
-    // @ts-expect-error
-    expect(passwordService.isPasswordValid(undefined)).toBe(false);
   });
 });

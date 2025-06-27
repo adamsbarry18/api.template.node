@@ -3,18 +3,18 @@ import path from 'path';
 import swaggerJSDoc from 'swagger-jsdoc';
 
 import config from '@/config';
-import { authSchemas, authorizationSchemas, userSchemas } from './openapi-schemas/users';
+import { authSchemas, authorizationSchemas, userSchemas } from './openapi-schemas';
 
 const swaggerDefinition = {
   openapi: '3.0.3',
   info: {
     title: 'API Documentation',
     version: '1.0.0',
-    description: 'Documentation auto-générée de l’API',
+    description: "Documentation auto-générée de l'API",
   },
   servers: [
     {
-      url: `${config.API_URL || `http://localhost:${config.PORT}`}/api/v1`,
+      url: `${config.API_URL ?? `http://localhost:${config.PORT}`}/api/v1`,
       description: `Serveur ${config.NODE_ENV}`,
     },
   ],
@@ -156,13 +156,59 @@ const swaggerDefinition = {
         },
       },
     },
+    parameters: {
+      pageQueryParam: {
+        name: 'page',
+        in: 'query',
+        schema: {
+          type: 'integer',
+          minimum: 1,
+          default: 1,
+        },
+        description: 'Page number for pagination',
+      },
+      limitQueryParam: {
+        name: 'limit',
+        in: 'query',
+        schema: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 100,
+          default: 10,
+        },
+        description: 'Number of items per page',
+      },
+      sortByQueryParam: {
+        name: 'sortBy',
+        in: 'query',
+        schema: {
+          type: 'string',
+        },
+        description: 'Field to sort by',
+      },
+      orderQueryParam: {
+        name: 'order',
+        in: 'query',
+        schema: {
+          type: 'string',
+          enum: ['ASC', 'DESC'],
+          default: 'ASC',
+        },
+        description: 'Sorting order (ASC or DESC)',
+      },
+    },
   },
   security: [{ bearerAuth: [] }],
 };
 
+const isProd = process.env.NODE_ENV === 'production' || __dirname.includes('dist');
+const apisPattern = isProd
+  ? path.resolve(process.cwd(), 'dist/modules/**/*.routes.js')
+  : path.resolve(process.cwd(), 'src/modules/**/*.routes.ts');
+
 const options = {
   swaggerDefinition,
-  apis: [path.resolve(process.cwd(), 'src/modules/**/*.routes.ts')],
+  apis: [apisPattern],
 };
 
 const swaggerSpec = swaggerJSDoc(options);

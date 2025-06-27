@@ -39,6 +39,8 @@ export class AuthorizationService {
    * Retrieves all features and their possible actions.
    * @returns An object mapping feature names to their actions.
    */
+
+  // eslint-disable-next-line @typescript-eslint/require-await
   async getAllFeatures(): Promise<Record<string, string[]>> {
     const result: Record<string, string[]> = {};
     FEATURES_CONFIG.forEach((feature) => {
@@ -68,6 +70,7 @@ export class AuthorizationService {
    * @param level The security level.
    * @returns An object mapping feature names to their actions.
    */
+  // eslint-disable-next-line @typescript-eslint/require-await
   async listAuthorisationsFromLevel(level: number): Promise<Record<string, string[]>> {
     const res: Record<string, string[]> = {};
     FEATURES_CONFIG.forEach((feature) => {
@@ -214,20 +217,12 @@ export class AuthorizationService {
     const user = await this.userRepository.findById(userId);
     if (!user) throw new NotFoundError(`User with id ${userId} not found.`);
     if (!user.isActive) {
-      logger.debug(
-        `Authorization check for User ${userId}: User is inactive. Denying permission for Feature ${featureName}, Action ${actionName}.`,
-      );
       return false;
     }
 
     const permissions = await this.getEffectivePermissions(userId);
     const hasPermission =
       permissions?.permissions?.[featureName]?.actions.includes(actionName) || false;
-
-    logger.debug(
-      `Authorization check for User ${userId}, Feature ${featureName}, Action ${actionName}: ${hasPermission}`,
-    );
-
     return hasPermission;
   }
 
@@ -241,29 +236,19 @@ export class AuthorizationService {
     const user = await this.userRepository.findById(userId);
     if (!user) throw new NotFoundError(`User with id ${userId} not found.`);
     if (!user.isActive) {
-      logger.debug(
-        `Level access check for User ${userId}: User is inactive. Denying access regardless of level. Required: ${requiredLevel}.`,
-      );
       return false;
     }
     const hasAccess = user.level >= requiredLevel;
-
-    logger.debug(
-      `Level access check for User ${userId} (Level ${user.level}) vs Required ${requiredLevel}: ${hasAccess}`,
-    );
-
     return hasAccess;
   }
 
   private async getEffectivePermissions(userId: number): Promise<DecodedAuthorisations | null> {
     const userForStatusCheck = await this.userRepository.findById(userId);
     if (!userForStatusCheck) {
-      logger.warn(`User with ID ${userId} not found when starting to get effective permissions.`);
       return null;
     }
 
     if (!userForStatusCheck.isActive) {
-      logger.info(`User ${userId} is inactive. No effective permissions will be granted.`);
       return {
         userId: userId,
         level: userForStatusCheck.level,
@@ -276,9 +261,6 @@ export class AuthorizationService {
       userForStatusCheck.permissionsExpireAt &&
       dayjs(userForStatusCheck.permissionsExpireAt).isBefore(dayjs())
     ) {
-      logger.info(
-        `Permissions for user ${userId} have globally expired at ${userForStatusCheck.permissionsExpireAt.toISOString()}. No effective permissions.`,
-      );
       await this.invalidateAuthCache(userId);
       return {
         userId: userId,
@@ -289,7 +271,6 @@ export class AuthorizationService {
     }
 
     if (!redisClient?.isReady) {
-      logger.warn('Redis unavailable for retrieving authorizations. Calculating directly.');
       return this.calculateEffectivePermissions(userId);
     }
 
@@ -301,7 +282,6 @@ export class AuthorizationService {
       if (cached) {
         permissions = JSON.parse(cached);
         if (permissions?.expiresAt && dayjs(permissions.expiresAt).isBefore(dayjs())) {
-          logger.info(`Authorization cache expired for user ${userId}. Recalculating.`);
           permissions = null;
           await redisClient.del(redisKey);
         }
@@ -311,7 +291,6 @@ export class AuthorizationService {
     }
 
     if (!permissions) {
-      logger.debug(`Cache miss for user ${userId} authorizations. Calculating.`);
       permissions = await this.calculateEffectivePermissions(userId);
       if (permissions) {
         try {
@@ -320,13 +299,10 @@ export class AuthorizationService {
             AUTHORISATION_CACHE_TTL_SECONDS,
             JSON.stringify(permissions),
           );
-          logger.debug(`Authorizations for user ${userId} cached.`);
         } catch (error) {
           logger.error(error, `Error caching authorizations for userId: ${userId}`);
         }
       }
-    } else {
-      logger.debug(`Cache hit for user ${userId} authorizations.`);
     }
 
     return permissions;
@@ -338,7 +314,6 @@ export class AuthorizationService {
     try {
       const redisKey = this.getRedisAuthorisationKey(userId);
       await redisClient.del(redisKey);
-      logger.debug(`Authorization cache invalidated for user ${userId}`);
     } catch (error) {
       logger.error(error, `Failed to invalidate authorization cache for user ${userId}`);
     }
@@ -349,7 +324,6 @@ export class AuthorizationService {
   ): Promise<DecodedAuthorisations | null> {
     const user = await this.userRepository.findById(userId);
     if (!user) {
-      logger.warn(`User with ID ${userId} not found when calculating permissions.`);
       return null;
     }
 
@@ -364,9 +338,6 @@ export class AuthorizationService {
       permissionExpiryDate.isBefore(dayjs())
     ) {
       areOverridesExpired = true;
-      logger.info(
-        `Authorisation overrides for user ${userId} have expired (Expiry: ${permissionExpiryDate.toISOString()}). Using default level permissions.`,
-      );
     }
 
     if (user.authorisationOverrides && !areOverridesExpired) {
@@ -394,12 +365,8 @@ export class AuthorizationService {
           foundLevel !== undefined
             ? foundLevel
             : this.calculateDefaultMaskForLevel(featureId, baseLevel);
-        logger.debug(`User ${userId}, Feature ${featureName}: Using override mask ${finalMask}`);
       } else {
         finalMask = this.calculateDefaultMaskForLevel(featureId, baseLevel);
-        logger.debug(
-          `User ${userId}, Feature ${featureName}: Using default mask ${finalMask} for level ${baseLevel}`,
-        );
       }
 
       const allowedActions: string[] = [];
@@ -447,9 +414,6 @@ export class AuthorizationService {
       try {
         const numAuth = parseInt(part, 10) ?? 0;
         if (isNaN(numAuth) || numAuth < 0) {
-          logger.warn(
-            `Invalid non-numeric or negative part found in authorisationOverrides: '${part}'. Skipping.`,
-          );
           continue;
         }
         const bitAuth = numAuth.toString(2).padStart(32, '0');
@@ -457,16 +421,11 @@ export class AuthorizationService {
         const permissionMask = parseInt(bitAuth.substring(16), 2);
 
         if (isNaN(featureId) || isNaN(permissionMask)) {
-          logger.warn(`Failed to parse featureId or permissionMask from part '${part}'. Skipping.`);
           continue;
         }
 
         if (featuresProcessedFlagsMap.has(featureId)) {
           decoded.set(featureId, permissionMask);
-        } else {
-          logger.warn(
-            `Decoded unknown feature ID ${featureId} from authorisationOverrides part '${part}'. Ignoring.`,
-          );
         }
       } catch (error) {
         logger.error(error, `Error decoding authorisationOverrides part '${part}'. Skipping.`);
@@ -478,7 +437,6 @@ export class AuthorizationService {
   private calculateDefaultMaskForLevel(featureId: number, userLevel: SecurityLevel): number {
     const featureInfo = featuresProcessedFlagsMap.get(featureId);
     if (!featureInfo) {
-      logger.warn(`Default mask calculation: Feature ID ${featureId} not found in config.`);
       return 0;
     }
 
@@ -515,15 +473,11 @@ export class AuthorizationService {
       if (Object.prototype.hasOwnProperty.call(permissions, featureName)) {
         const featureId = featureNameToIdMap.get(featureName);
         if (featureId === undefined) {
-          logger.warn(`Encoding permissions: Unknown feature name '${featureName}'. Skipping.`);
           continue;
         }
 
         const featureInfo = featuresProcessedFlagsMap.get(featureId);
         if (!featureInfo) {
-          logger.warn(
-            `Encoding permissions: Feature ID ${featureId} (${featureName}) not found in processed map. Skipping.`,
-          );
           continue;
         }
 
@@ -534,16 +488,9 @@ export class AuthorizationService {
             const actionConfig = featureInfo.flags[actionName];
             if (actionConfig) {
               permissionMask |= actionConfig.combinedMask;
-            } else {
-              logger.warn(
-                `Encoding permissions: Unknown action name '${actionName}' for feature '${featureName}'. Skipping.`,
-              );
             }
           }
         } else {
-          logger.warn(
-            `Encoding permissions: Invalid action list for feature '${featureName}'. Expected array, got ${typeof allowedActions}. Skipping.`,
-          );
           continue;
         }
         const combined = (featureId << 16) | permissionMask;

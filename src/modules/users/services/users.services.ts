@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 
 import dayjs from 'dayjs';
-import { type FindOptionsWhere } from 'typeorm';
+import { type FindOptionsWhere, type FindManyOptions } from 'typeorm';
 
 import {
   NotFoundError,
@@ -10,7 +10,6 @@ import {
   ServerError,
 } from '@/common/errors/httpErrors';
 import { AuthorizationUtils } from '@/common/utils/AuthorizationUtils';
-import { type Request } from '@/config/http';
 import logger from '@/lib/logger';
 import { PasswordService } from '@/modules/auth/services/password.services';
 
@@ -24,6 +23,8 @@ import {
   type User,
   validationInputErrors,
 } from '../models/users.entity';
+
+import { type Profile as GoogleProfile } from 'passport-google-oauth20';
 
 let instance: UsersService | null = null;
 
@@ -46,9 +47,7 @@ export class UsersService {
    */
   mapToApiResponse(user: User | null): UserApiResponse | null {
     if (!user) return null;
-    const apiUser = user.toApi() as UserApiResponse;
-    if (user.createdAt) apiUser.createdTime = user.createdAt;
-    if (user.updatedAt) apiUser.updatedTime = user.updatedAt;
+    const apiUser = user.toApi();
     return apiUser;
   }
 
@@ -58,13 +57,11 @@ export class UsersService {
    * @returns The user API response.
    */
   async findById(id: number): Promise<UserApiResponse> {
-    // Permission checks are now handled solely by the @authorize decorator in the route
     try {
       const user = await this.userRepository.findById(id);
       if (!user) throw new NotFoundError(`User with id ${id} not found.`);
       const apiResponse = this.mapToApiResponse(user);
       if (!apiResponse) {
-        // This should theoretically not happen if findById found a user
         throw new ServerError(`Failed to map found user with id ${id} to API response.`);
       }
       return apiResponse;
@@ -82,21 +79,16 @@ export class UsersService {
    * @returns The user API response.
    */
   async findByEmail(email: string): Promise<UserApiResponse> {
-    // Permission checks are now handled solely by the @authorize decorator in the route
     try {
       const user = await this.userRepository.findByEmail(email);
       if (!user) throw new NotFoundError(`User with email ${email} not found.`);
 
-      // Removed permission check block that used requestingUser
-
       const apiResponse = this.mapToApiResponse(user);
       if (!apiResponse) {
-        // This should theoretically not happen if findByEmail found a user
         throw new ServerError(`Failed to map found user with email ${email} to API response.`);
       }
       return apiResponse;
     } catch (error) {
-      // Let specific HTTP errors pass through, wrap others as ServerError
       if (error instanceof NotFoundError || error instanceof ForbiddenError) {
         throw error;
       }
@@ -123,22 +115,26 @@ export class UsersService {
    * @param options Optional request context including pagination.
    * @returns Array of user API responses.
    */
-  async findAll(options?: { limit?: number; offset?: number }): Promise<UserApiResponse[]> {
+  async findAll(options?: {
+    limit?: number;
+    offset?: number;
+    filters?: FindOptionsWhere<User>;
+    sort?: FindManyOptions<User>['order'];
+  }): Promise<{ users: UserApiResponse[]; total: number }> {
     try {
-      // La logique de filtrage basée sur requestingUser.internal a été supprimée.
-      // Si un filtrage basé sur 'internal' est toujours nécessaire,
-      // il doit être géré par les décorateurs @filterable dans la route
-      // ou ajouté explicitement ici si nécessaire pour tous les appels.
-      const where: FindOptionsWhere<User> = {};
-      const { users } = await this.userRepository.findAll({
-        where, // 'where' est maintenant potentiellement vide ou basé sur d'autres filtres
+      const { users, count } = await this.userRepository.findAll({
+        where: options?.filters,
         skip: options?.offset,
         take: options?.limit,
+        order: options?.sort,
       });
-      // Map and filter out any potential null results before returning
-      return users.map((user) => this.mapToApiResponse(user)).filter(Boolean) as UserApiResponse[];
+      const apiUsers = users
+        .map((user) => this.mapToApiResponse(user))
+        .filter(Boolean) as UserApiResponse[];
+      return { users: apiUsers, total: count };
     } catch (error) {
-      throw new ServerError(`Error finding all users ${error}`);
+      logger.error(`Error finding all users: ${error}`);
+      throw new ServerError('Error finding all users.');
     }
   }
 
@@ -148,10 +144,7 @@ export class UsersService {
    * @param options Optional request context.
    * @returns The created or reactivated user API response.
    */
-  async create(
-    input: CreateUserInput,
-    options?: { requestingUser?: Request['user'] },
-  ): Promise<UserApiResponse> {
+  async create(input: CreateUserInput): Promise<UserApiResponse> {
     const { password, email, permissions, permissionsExpireAt, isActive, ...restData } = input;
     if (!email) {
       throw new BadRequestError('Email is required.');
@@ -165,57 +158,53 @@ export class UsersService {
         'Password does not meet complexity requirements (min. 8 chars, 1 uppercase, 1 lowercase, 1 digit, 1 special character).',
       );
     }
-    const isInternalRequestor = !!options?.requestingUser?.internal;
-    if (restData.internal && !isInternalRequestor) {
-      throw new ForbiddenError('Cannot create internal user without being internal.');
-    }
+
     const existingActiveUser = await this.userRepository.findByEmail(lowerCaseEmail);
     if (existingActiveUser) {
       throw new BadRequestError('Email address is already in use by an active user.');
     }
+
+    const assignedLevel: SecurityLevel = SecurityLevel.USER;
+    const assignedInternal: boolean = false;
+
+    const finalRestData = { ...restData, internal: assignedInternal };
+
     try {
       const hashedPassword = await this.passwordService.hashPassword(password);
       const encodedOverrides = AuthorizationUtils.encodePermissionsToString(permissions ?? {});
       const deletedUser = await this.userRepository.findDeletedByEmail(lowerCaseEmail);
       let userEntity: User;
+
+      const userData = {
+        ...finalRestData,
+        level: assignedLevel,
+        email: lowerCaseEmail,
+        password: hashedPassword,
+        passwordStatus: PasswordStatus.ACTIVE,
+        passwordUpdatedAt: new Date(),
+        authorisationOverrides: encodedOverrides,
+        permissionsExpireAt: permissionsExpireAt ? dayjs(permissionsExpireAt).toDate() : null,
+        isActive: isActive ? true : isActive,
+        uid: randomUUID(),
+      };
+
       if (deletedUser) {
-        logger.info(
-          `Reactivating deleted user with email ${lowerCaseEmail} (ID: ${deletedUser.id})`,
-        );
-        Object.assign(deletedUser, restData);
+        Object.assign(deletedUser, userData);
         deletedUser.deletedAt = null;
-        deletedUser.email = lowerCaseEmail;
-        deletedUser.password = hashedPassword;
-        deletedUser.passwordStatus = PasswordStatus.ACTIVE;
-        deletedUser.passwordUpdatedAt = new Date();
         deletedUser.uid = deletedUser.uid ?? randomUUID();
-        deletedUser.authorisationOverrides = encodedOverrides;
-        deletedUser.permissionsExpireAt = permissionsExpireAt
-          ? dayjs(permissionsExpireAt).toDate()
-          : null;
-        deletedUser.isActive = isActive === undefined ? true : isActive; // Reactivate by default, or use input
         userEntity = deletedUser;
       } else {
-        userEntity = this.userRepository.create({
-          ...restData,
-          email: lowerCaseEmail,
-          password: hashedPassword,
-          uid: randomUUID(),
-          passwordStatus: PasswordStatus.ACTIVE,
-          passwordUpdatedAt: new Date(),
-          authorisationOverrides: encodedOverrides,
-          permissionsExpireAt: permissionsExpireAt ? dayjs(permissionsExpireAt).toDate() : null,
-          isActive: isActive === undefined ? true : isActive, // Default to true if not provided
-        });
+        userEntity = this.userRepository.create(userData);
       }
+
       if (!userEntity.isValid()) {
-        throw new BadRequestError(`User data is invalid ${validationInputErrors}`);
+        throw new BadRequestError(
+          `User data is invalid. Errors: ${validationInputErrors.join(', ')}`,
+        );
       }
       const savedUser = await this.userRepository.save(userEntity);
-      logger.info(`User ${savedUser.id} ${deletedUser ? 'reactivated' : 'created'} successfully.`);
       const apiResponse = this.mapToApiResponse(savedUser);
       if (!apiResponse) {
-        // This should theoretically not happen after a successful save
         throw new ServerError(
           `Failed to map newly created/reactivated user ${savedUser.id} to API response.`,
         );
@@ -239,31 +228,148 @@ export class UsersService {
   }
 
   /**
+   * Creates a new user or reactivates a previously deleted user, intended for admin use.
+   * This method allows specifying the security level and internal status.
+   * @param input The user creation input, where 'level' and 'internal' will be respected.
+   * @returns The created or reactivated user API response.
+   */
+  async createByAdmin(input: CreateUserInput): Promise<UserApiResponse> {
+    const {
+      password,
+      email,
+      permissions,
+      permissionsExpireAt,
+      isActive,
+      level: inputLevel,
+      internal: inputInternal,
+      ...restData
+    } = input;
+
+    if (!email) {
+      throw new BadRequestError('Email is required for admin creation.');
+    }
+    if (!password) {
+      throw new BadRequestError('Password is required for admin creation.');
+    }
+    const lowerCaseEmail = email.toLowerCase().trim();
+    if (!this.passwordService.isPasswordValid(password)) {
+      throw new BadRequestError(
+        'Password does not meet complexity requirements (min. 8 chars, 1 uppercase, 1 lowercase, 1 digit, 1 special character).',
+      );
+    }
+
+    const existingActiveUser = await this.userRepository.findByEmail(lowerCaseEmail);
+    if (existingActiveUser) {
+      throw new BadRequestError('Email address is already in use by an active user.');
+    }
+
+    let assignedLevel: SecurityLevel;
+    if (inputLevel !== undefined) {
+      if (Object.values(SecurityLevel).includes(inputLevel as SecurityLevel)) {
+        assignedLevel = inputLevel as SecurityLevel;
+      } else {
+        throw new BadRequestError(`Invalid security level provided by admin: ${inputLevel}.`);
+      }
+    } else {
+      assignedLevel = SecurityLevel.USER;
+    }
+
+    const assignedInternal = inputInternal ?? false;
+
+    try {
+      const hashedPassword = await this.passwordService.hashPassword(password);
+      const encodedOverrides = AuthorizationUtils.encodePermissionsToString(permissions ?? {});
+      const deletedUser = await this.userRepository.findDeletedByEmail(lowerCaseEmail);
+      let userEntity: User;
+
+      const userData = {
+        ...restData,
+        level: assignedLevel,
+        internal: assignedInternal,
+        email: lowerCaseEmail,
+        password: hashedPassword,
+        passwordStatus: PasswordStatus.ACTIVE,
+        passwordUpdatedAt: new Date(),
+        authorisationOverrides: encodedOverrides,
+        permissionsExpireAt: permissionsExpireAt ? dayjs(permissionsExpireAt).toDate() : null,
+        isActive: isActive ? true : isActive,
+        uid: randomUUID(),
+      };
+
+      if (deletedUser) {
+        Object.assign(deletedUser, userData);
+        deletedUser.deletedAt = null;
+        deletedUser.uid = deletedUser.uid ?? randomUUID();
+        userEntity = deletedUser;
+      } else {
+        userEntity = this.userRepository.create(userData);
+      }
+
+      if (!userEntity.isValid()) {
+        throw new BadRequestError(
+          `User data (admin creation) is invalid. Errors: ${validationInputErrors.join(', ')}`,
+        );
+      }
+      const savedUser = await this.userRepository.save(userEntity);
+
+      const apiResponse = this.mapToApiResponse(savedUser);
+      if (!apiResponse) {
+        throw new ServerError(
+          `Failed to map admin-created/reactivated user ${savedUser.id} to API response.`,
+        );
+      }
+      return apiResponse;
+    } catch (error: any) {
+      logger.error({
+        message: `Error during admin user creation/reactivation for ${email}`,
+        originalError: error,
+        originalStack: error?.stack,
+      });
+      if (
+        error instanceof BadRequestError ||
+        error instanceof ForbiddenError ||
+        error instanceof NotFoundError
+      ) {
+        throw error;
+      }
+      throw new ServerError(`Failed to create user via admin. ${error}`);
+    }
+  }
+
+  /**
    * Updates an existing user's information.
    * @param id The user ID.
    * @param input The update input.
    * @param options Optional request context.
    * @returns The updated user API response.
    */
-  async update(
-    id: number,
-    input: UpdateUserInput,
-    options?: { requestingUser?: Request['user'] },
-  ): Promise<UserApiResponse> {
-    const { password, permissions, permissionsExpireAt, isActive, ...restData } = input;
-    const requestingUser = options?.requestingUser;
-    if (requestingUser) {
-      const isSelf = requestingUser.id === id;
-      const isAdmin = requestingUser.level >= SecurityLevel.ADMIN;
-      if (!isSelf && !isAdmin) {
-        throw new ForbiddenError('You do not have permission to update this user.');
-      }
-    }
+  async update(id: number, input: UpdateUserInput): Promise<UserApiResponse> {
+    const {
+      password,
+      permissions,
+      permissionsExpireAt,
+      isActive,
+      level: inputLevel,
+      ...restData
+    } = input;
     try {
       const user = await this.userRepository.findByIdWithPassword(id);
       if (!user) throw new NotFoundError(`User with id ${id} not found.`);
+
       const updatePayload: Partial<User> = { ...restData };
       let passwordChanged = false;
+
+      if (inputLevel !== undefined) {
+        if (Object.values(SecurityLevel).includes(inputLevel as SecurityLevel)) {
+          updatePayload.level = inputLevel as SecurityLevel;
+        } else {
+          throw new BadRequestError(`Invalid security level provided for update: ${inputLevel}.`);
+        }
+      }
+      if (input.internal !== undefined) {
+        updatePayload.internal = input.internal;
+      }
+
       if (password) {
         if (!this.passwordService.isPasswordValid(password)) {
           throw new BadRequestError(
@@ -276,8 +382,6 @@ export class UsersService {
           updatePayload.passwordUpdatedAt = new Date();
           updatePayload.passwordStatus = PasswordStatus.VALIDATING;
           passwordChanged = true;
-        } else {
-          logger.warn(`User ${id} attempted to update with the same password.`);
         }
       }
       if (permissions !== undefined) {
@@ -293,13 +397,11 @@ export class UsersService {
         updatePayload.isActive = isActive;
       }
 
-      // Appliquer d'abord les restData, puis les champs spécifiques pour s'assurer qu'ils ne sont pas écrasés par restData si présents
       Object.assign(user, restData, updatePayload);
 
       if (!user.isValid()) {
         throw new BadRequestError(`User data after update is invalid. ${validationInputErrors}`);
       }
-      // On reconstruit le payload final pour la mise à jour pour éviter de passer des champs non modifiables directement
       const finalUpdatePayload: Partial<User> = { ...restData };
       if (updatePayload.password) finalUpdatePayload.password = updatePayload.password;
       if (updatePayload.passwordUpdatedAt)
@@ -325,10 +427,8 @@ export class UsersService {
         const emailLanguage = updatedUser.preferences?.language === 'fr' ? 'fr' : 'en';
         await this.passwordService.sendPasswordConfirmationEmail(updatedUser, emailLanguage);
       }
-      logger.info(`User ${id} updated successfully.`);
       const apiResponse = this.mapToApiResponse(updatedUser);
       if (!apiResponse) {
-        // This should theoretically not happen after a successful update and re-fetch
         throw new ServerError(`Failed to map updated user ${id} to API response.`);
       }
       return apiResponse;
@@ -364,7 +464,6 @@ export class UsersService {
       }
       const apiResponse = this.mapToApiResponse(updatedUser);
       if (!apiResponse) {
-        // This should theoretically not happen after a successful preference update and re-fetch
         throw new ServerError(
           `Failed to map user ${userId} after preference update to API response.`,
         );
@@ -388,19 +487,25 @@ export class UsersService {
    * Updates a specific preference key for a user.
    * @param userId The user ID.
    * @param key The preference key to update.
-   * @param value The new value for the preference key.
+   * @param value The new value for the preference key. Can be any JSON-serializable value.
    * @returns The updated user API response.
    */
-  async updatePreferenceByKey(userId: number, key: string, value: any): Promise<UserApiResponse> {
+  async updatePreferenceByKey(
+    userId: number,
+    key: string,
+    value: unknown,
+  ): Promise<UserApiResponse> {
     try {
       const user = await this.userRepository.findById(userId);
       if (!user) throw new NotFoundError(`User with id ${userId} not found.`);
 
-      const currentPreferences = user.preferences || {};
-      currentPreferences[key] = value;
+      const currentPreferences = user.preferences ?? {};
+      const updatedPreferences = {
+        ...currentPreferences,
+        [key.toString()]: value,
+      };
 
-      // Use the existing updatePreferences method to save the changes
-      return await this.updatePreferences(userId, currentPreferences);
+      return await this.updatePreferences(userId, updatedPreferences);
     } catch (error) {
       if (error instanceof NotFoundError) {
         throw error;
@@ -415,24 +520,12 @@ export class UsersService {
    * @param options Optional request context.
    * @returns void
    */
-  async delete(id: number, options?: { requestingUser?: Request['user'] }): Promise<void> {
-    const requestingUser = options?.requestingUser;
-    if (requestingUser) {
-      const isSelf = requestingUser.id === id;
-      const isAdmin = requestingUser.level >= SecurityLevel.ADMIN;
-      if (!isSelf && !isAdmin) {
-        throw new ForbiddenError('You do not have permission to delete this user.');
-      }
-      if (isSelf && isAdmin) {
-        throw new ForbiddenError('Deleting your own account via the API is not permitted.');
-      }
-    }
+  async delete(id: number): Promise<void> {
     try {
       const user = await this.userRepository.findById(id);
       if (!user) throw new NotFoundError(`User with id ${id} not found.`);
       const anonymizedEmail = `${user.email}_deleted_${Date.now()}`;
       await this.userRepository.softDelete(id, anonymizedEmail);
-      logger.info(`User ${id} successfully soft-deleted.`);
     } catch (error) {
       if (
         error instanceof BadRequestError ||
@@ -446,13 +539,126 @@ export class UsersService {
   }
 
   /**
+   * Finds an existing user by Google ID or email, or creates a new user if not found.
+   * Associates the Google profile with the user account.
+   * @param profile The Google profile object from passport-google-oauth20.
+   * @returns The found or created User entity (not UserApiResponse).
+   * @throws BadRequestError if email or first name is missing from profile, or if email is linked to another Google ID.
+   * @throws ServerError if user creation or update fails unexpectedly.
+   */
+  async findOrCreateByGoogleProfile(profile: GoogleProfile): Promise<User> {
+    const googleId = profile.id;
+    const email = profile.emails?.[0]?.value;
+    const firstName = profile.name?.givenName;
+    const lastName = profile.name?.familyName;
+
+    if (!email) {
+      throw new BadRequestError('Email not found in Google profile. Cannot create or link user.');
+    }
+    if (!firstName) {
+      throw new BadRequestError(
+        'First name not found in Google profile. Cannot create or link user.',
+      );
+    }
+
+    // 1. Try to find user by Google ID
+    let user = await this.userRepository.findByGoogleId(googleId);
+    if (user) {
+      let detailsChanged = false;
+      if (firstName && user.firstName !== firstName) {
+        user.firstName = firstName;
+        detailsChanged = true;
+      }
+      if (lastName && user.lastName !== lastName) {
+        user.lastName = lastName;
+        detailsChanged = true;
+      }
+      if (detailsChanged) {
+        await this.userRepository.save(user);
+      }
+      return user;
+    }
+
+    user = await this.userRepository.findByEmailWithGoogleId(email.toLowerCase());
+
+    if (user) {
+      if (user.googleId && user.googleId !== googleId) {
+        logger.error(
+          `User with email ${email} (ID: ${user.id}) is already linked to a different Google ID (${user.googleId}). Cannot link to ${googleId}.`,
+        );
+        throw new BadRequestError(
+          'This email address is already associated with a different Google account.',
+        );
+      }
+
+      if (!user.googleId) {
+        user.googleId = googleId;
+        if (firstName && user.firstName !== firstName) user.firstName = firstName;
+        if (lastName && user.lastName !== lastName) user.lastName = lastName;
+
+        await this.userRepository.save(user);
+      }
+      return user;
+    }
+
+    const newUser = this.userRepository.create({
+      googleId,
+      email: email.toLowerCase(),
+      firstName,
+      lastName: lastName ?? null,
+      level: SecurityLevel.USER,
+      internal: false,
+      isActive: true,
+      passwordStatus: PasswordStatus.ACTIVE,
+      password: null,
+      uid: randomUUID(),
+      passwordUpdatedAt: new Date(),
+    });
+    if (!newUser.isValid()) {
+      logger.error(
+        {
+          validationErrors: validationInputErrors,
+          userAttributes: {
+            email: newUser.email,
+            firstName: newUser.firstName,
+            googleId: newUser.googleId,
+          },
+        },
+        'Validation failed for new Google user',
+      );
+      throw new BadRequestError(
+        `New user data from Google profile is invalid. Errors: ${validationInputErrors.join(', ')}`,
+      );
+    }
+
+    try {
+      const savedUser = await this.userRepository.save(newUser);
+      return savedUser;
+    } catch (error: any) {
+      if (
+        error.code === 'ER_DUP_ENTRY' ||
+        (typeof error === 'object' &&
+          error?.message &&
+          (error.message as string).includes('unique constraint'))
+      ) {
+        const existingByGoogleId = await this.userRepository.findByGoogleId(googleId);
+        if (existingByGoogleId) return existingByGoogleId;
+        const existingByEmail = await this.userRepository.findByEmailWithGoogleId(
+          email.toLowerCase(),
+        );
+        if (existingByEmail) return existingByEmail;
+      }
+      logger.error(error, `Error saving new user from Google profile for email ${email}`);
+      throw new ServerError('Could not create or link user account with Google profile.');
+    }
+  }
+
+  /**
    * Returns a singleton instance of UsersService.
    * @returns The UsersService instance.
    */
   static getInstance(): UsersService {
-    if (!instance) {
-      instance = new UsersService(new UserRepository());
-    }
+    instance ??= new UsersService(new UserRepository());
     return instance;
   }
 }

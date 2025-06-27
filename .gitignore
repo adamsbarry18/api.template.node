@@ -8,6 +8,7 @@ pids
 *.pid
 *.seed
 *.pid.lock
+config.yml
 
 # Dependency directories
 node_modules/
@@ -31,9 +32,8 @@ coverage
 .nyc_output
 
 # Environment files
-.env*
-!.env.example
-!.env.test
+.env
+.env.development
 
 
 # IDE config files
@@ -49,3 +49,5 @@ coverage
 
 # Vitest cache
 .vitest-cache.*
+.vitest/cache
+.vercel

@@ -21,12 +21,15 @@ jobs:
 
     steps:
       - name: Checkout code
+        # Il est recommandé de pinner actions/checkout à un SHA spécifique pour la sécurité et la stabilité
+        # L'action elle-même (actions/checkout) est déjà configurée avec un SHA dans votre log (v4.2.2)
         uses: actions/checkout@v4 # Utilise une action GitHub pour cloner le dépôt
 
       - name: Run Renovate
         # Utilise l'action officielle de Renovate pour GitHub
-        # @v3 est stable, vous serez notifié par Renovate lui-même s'il y a une nouvelle version de cette action !
-        uses: renovatebot/github-action@v3
+        # Met à jour la version de v3 à v4
+        # Pour une stabilité maximale, il est recommandé de pinner à un SHA spécifique (voir note ci-dessous)
+        uses: renovatebot/github-action@v4 # CHANGED from v3 to v4
         env:
           # Le GITHUB_TOKEN est fourni par GitHub Actions et a les permissions définies ci-dessus
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

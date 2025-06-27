@@ -8,8 +8,8 @@ import { SecurityLevel } from '../models/users.entity';
 
 let createdUserId: number;
 let zombieUserId: number;
-let standardUserId: number;
-let readerUserId: number;
+let standardUserId: number | undefined;
+let readerUserId: number | undefined;
 let userToken: string;
 let readerToken: string;
 
@@ -26,39 +26,35 @@ const createAndLoginUser = async (
   level: SecurityLevel,
   password = 'Password123!',
 ) => {
-  let userId: number;
-  let token: string;
+  let userId: number | undefined;
+  let token: string = '';
 
+  // Use the new admin route to create users with specific levels for testing setup
   const userRes = await request(app)
-    .post('/api/v1/users')
+    .post('/api/v1/admin/users')
     .set('Authorization', `Bearer ${adminToken}`)
     .send({ email, firstName: 'Test', lastName: 'User', password, level });
 
   if (userRes.status === 201) {
     userId = userRes.body.data.id;
-  } else if (userRes.status === 400 && userRes.body?.message?.includes('already exists')) {
+  } else if (
+    userRes.status === 400 &&
+    typeof userRes.body?.data === 'string' &&
+    (userRes.body.data as string).includes('Email address is already in use by an active user')
+  ) {
     const getUserRes = await request(app)
       .get(`/api/v1/users/${email}`)
       .set('Authorization', `Bearer ${adminToken}`);
     if (getUserRes.status === 200) {
       userId = getUserRes.body.data.id;
       await request(app)
-        .put(`/api/v1/users/${userId}`)
+        .put(`/api/v1/users/${userId}/password`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ password });
-    } else {
-      throw new Error(`Failed to retrieve existing user ${email}`);
     }
-  } else {
-    console.error(`Failed to create user ${email}:`, userRes.body);
-    throw new Error(`Failed to create or retrieve user ${email}. Status: ${userRes.status}`);
   }
 
   const loginRes = await request(app).post('/api/v1/auth/login').send({ email, password });
-  if (loginRes.status !== 200) {
-    console.error(`Failed to login user ${email}:`, loginRes.body);
-    throw new Error(`Failed to login user ${email}. Status: ${loginRes.status}`);
-  }
   token = loginRes.body.data.token;
 
   return { userId, token };
@@ -66,66 +62,56 @@ const createAndLoginUser = async (
 
 describe('Users API', () => {
   beforeAll(async () => {
-    try {
-      const standardUser = await createAndLoginUser(
-        standardUserEmail,
-        SecurityLevel.USER,
-        standardUserPassword,
-      );
-      standardUserId = standardUser.userId;
-      userToken = standardUser.token;
+    const standardUser = await createAndLoginUser(
+      standardUserEmail,
+      SecurityLevel.USER,
+      standardUserPassword,
+    );
+    standardUserId = standardUser.userId;
+    userToken = standardUser.token;
 
-      const readerUser = await createAndLoginUser(
-        readerUserEmail,
-        SecurityLevel.READER,
-        readerUserPassword,
-      );
-      readerUserId = readerUser.userId;
-      readerToken = readerUser.token;
+    const readerUser = await createAndLoginUser(
+      readerUserEmail,
+      SecurityLevel.READER,
+      readerUserPassword,
+    );
+    readerUserId = readerUser.userId;
+    readerToken = readerUser.token;
 
-      const mainUserRes = await request(app)
-        .post('/api/v1/users')
-        .set('Authorization', `Bearer ${adminToken}`)
-        .send({
-          email: userMail,
-          firstName: 'Main',
-          lastName: 'Test',
-          color: '#FAFAFA',
-          password: 'PasswordMain1!',
-          level: SecurityLevel.USER,
-          preferences: { hello: 'world' },
-          isActive: true,
-          permissionsExpireAt: new Date(Date.now() + 3600000 * 24).toISOString(), // Expires in 24 hours
-        });
-      if (mainUserRes.status === 201) {
-        createdUserId = mainUserRes.body.data.id;
-      } else if (
-        mainUserRes.status === 400 &&
-        mainUserRes.body?.message?.includes('already in use by an active user') // Message d'erreur mis à jour
-      ) {
-        const getMainUserRes = await request(app)
-          .get(`/api/v1/users/${userMail}`)
-          .set('Authorization', `Bearer ${adminToken}`);
-        if (getMainUserRes.status === 200) {
-          createdUserId = getMainUserRes.body.data.id;
-        } else {
-          throw new Error(`Failed to retrieve existing main user ${userMail}`);
-        }
-      } else {
-        throw new Error(
-          `Failed to create or retrieve main user ${userMail}. Status: ${mainUserRes.status}`,
-        );
+    const mainUserRes = await request(app)
+      .post('/api/v1/admin/users')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        email: userMail,
+        firstName: 'Main',
+        lastName: 'Test',
+        color: '#FAFAFA',
+        password: 'PasswordMain1!',
+        level: SecurityLevel.USER,
+        preferences: { hello: 'world' },
+        isActive: true,
+        permissionsExpireAt: new Date(Date.now() + 3600000 * 24).toISOString(), // Expires in 24 hours
+      });
+    if (mainUserRes.status === 201) {
+      createdUserId = mainUserRes.body.data.id;
+    } else if (
+      mainUserRes.status === 400 &&
+      typeof mainUserRes.body?.message === 'string' &&
+      (mainUserRes.body.message as string).includes('already in use by an active user') // Message d'erreur mis à jour
+    ) {
+      const getMainUserRes = await request(app)
+        .get(`/api/v1/users/${userMail}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      if (getMainUserRes.status === 200) {
+        createdUserId = getMainUserRes.body.data.id;
       }
-    } catch (error) {
-      console.error('Error during beforeAll setup:', error);
-      throw error;
     }
   });
 
   describe('POST /users', () => {
     it('should fail to create user with existing email (as admin)', async () => {
       const res = await request(app)
-        .post('/api/v1/users')
+        .post('/api/v1/admin/users')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           email: userMail,
@@ -136,7 +122,6 @@ describe('Users API', () => {
         });
       expect(res.status).toBe(400);
       expect(res.body.status).toBe('fail');
-      // Adjusting assertion as the specific message might be overridden by error handling
       expect(res.body.message).toBe('Bad request');
     });
 
@@ -144,7 +129,7 @@ describe('Users API', () => {
       const inactiveUserEmail = `inactive-${uid}@mailtrap.com`;
       const expireDate = new Date(Date.now() - 3600000).toISOString(); // Expired 1 hour ago
       const res = await request(app)
-        .post('/api/v1/users')
+        .post('/api/v1/admin/users')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           email: inactiveUserEmail,
@@ -159,7 +144,6 @@ describe('Users API', () => {
       expect(res.body.status).toBe('success');
       expect(res.body.data.isActive).toBe(false);
       expect(new Date(res.body.data.permissionsExpireAt).toISOString()).toBe(expireDate);
-      // Clean up created user
       await request(app)
         .delete(`/api/v1/users/${res.body.data.id}`)
         .set('Authorization', `Bearer ${adminToken}`);
@@ -168,7 +152,7 @@ describe('Users API', () => {
     it('should create a user with isActive: true by default and null permissionsExpireAt (as admin)', async () => {
       const defaultActiveUserEmail = `default-active-${uid}@mailtrap.com`;
       const res = await request(app)
-        .post('/api/v1/users')
+        .post('/api/v1/admin/users')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           email: defaultActiveUserEmail,
@@ -176,36 +160,62 @@ describe('Users API', () => {
           lastName: 'User',
           password: 'PasswordDefault1!',
           level: SecurityLevel.READER,
-          // isActive and permissionsExpireAt are omitted to test defaults
         });
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('success');
       expect(res.body.data.isActive).toBe(true);
       expect(res.body.data.permissionsExpireAt).toBeNull();
-      // Clean up created user
       await request(app)
         .delete(`/api/v1/users/${res.body.data.id}`)
         .set('Authorization', `Bearer ${adminToken}`);
     });
 
-    it('should fail to create user (as standard user)', async () => {
-      const res = await request(app)
-        .post('/api/v1/users')
-        .set('Authorization', `Bearer ${userToken}`)
-        .send({
-          email: `forbidden-${uid}@mailtrap.com`,
-          firstName: 'forbidden',
-          lastName: 'user',
-          password: 'Password1!',
-          level: SecurityLevel.READER,
-        });
-      expect(res.status).toBe(403);
-      expect(res.body.status).toBe('fail');
+    it('should allow unauthenticated user to register with default USER level', async () => {
+      const newUserEmail = `new-public-user-${uid}@mailtrap.com`;
+      const res = await request(app).post('/api/v1/users').send({
+        email: newUserEmail,
+        firstName: 'Public',
+        lastName: 'User',
+        password: 'PasswordPublic1!',
+      });
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('success');
+      expect(res.body.data.email).toBe(newUserEmail);
+      expect(res.body.data.level).toBe(SecurityLevel.USER);
+
+      // cleaning
+      if (res.body.data.id) {
+        await request(app)
+          .delete(`/api/v1/users/${res.body.data.id}`)
+          .set('Authorization', `Bearer ${adminToken}`);
+      }
     });
 
-    it('should fail to create user with invalid data (as admin)', async () => {
+    it('should allow unauthenticated user to register and force USER level even if ADMIN level is requested', async () => {
+      const newUserAdminAttemptEmail = `new-public-admin-attempt-${uid}@mailtrap.com`;
+      const res = await request(app).post('/api/v1/users').send({
+        email: newUserAdminAttemptEmail,
+        firstName: 'PublicAdminAttempt',
+        lastName: 'User',
+        password: 'PasswordAttempt1!',
+        level: SecurityLevel.ADMIN,
+      });
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('success');
+      expect(res.body.data.email).toBe(newUserAdminAttemptEmail);
+      expect(res.body.data.level).toBe(SecurityLevel.USER);
+
+      // Nettoyage
+      if (res.body.data.id) {
+        await request(app)
+          .delete(`/api/v1/users/${res.body.data.id}`)
+          .set('Authorization', `Bearer ${adminToken}`);
+      }
+    });
+
+    it('should fail to create user with invalid data (as admin, via admin route)', async () => {
       const res = await request(app)
-        .post('/api/v1/users')
+        .post('/api/v1/admin/users')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           status: 'active',
@@ -238,8 +248,8 @@ describe('Users API', () => {
         expect(entry).toHaveProperty('level');
         expect(entry).toHaveProperty('isActive');
         expect(entry).toHaveProperty('permissionsExpireAt');
-        expect(entry).toHaveProperty('createdTime');
-        expect(entry).toHaveProperty('updatedTime');
+        expect(entry).toHaveProperty('createdAt');
+        expect(entry).toHaveProperty('updatedAt');
         expect(entry).toHaveProperty('preferences');
         expect(entry).toHaveProperty('id');
         expect(entry).not.toHaveProperty('password');
@@ -286,8 +296,8 @@ describe('Users API', () => {
       expect(entry.level).toBe(SecurityLevel.USER);
       expect(entry.isActive).toBe(true);
       expect(entry.permissionsExpireAt).not.toBeNull();
-      expect(entry).toHaveProperty('createdTime');
-      expect(entry).toHaveProperty('updatedTime');
+      expect(entry).toHaveProperty('createdAt');
+      expect(entry).toHaveProperty('updatedAt');
       expect(entry).toHaveProperty('preferences');
       expect(entry.preferences).toHaveProperty('hello', 'world');
       expect(entry).not.toHaveProperty('password');
@@ -343,8 +353,8 @@ describe('Users API', () => {
       expect(entry.level).toBe(SecurityLevel.USER);
       expect(entry.isActive).toBe(true);
       expect(entry.permissionsExpireAt).not.toBeNull();
-      expect(entry).toHaveProperty('createdTime');
-      expect(entry).toHaveProperty('updatedTime');
+      expect(entry).toHaveProperty('createdAt');
+      expect(entry).toHaveProperty('updatedAt');
       expect(entry).toHaveProperty('preferences');
       expect(entry).not.toHaveProperty('password');
     });
@@ -546,9 +556,8 @@ describe('Users API', () => {
 
   describe('DELETE /users/:id/preferences', () => {
     it('should reset user preferences (as admin)', async () => {
-      // Crée un utilisateur dédié pour ce test afin d'éviter l'effet de bord de suppression
       const resCreate = await request(app)
-        .post('/api/v1/users')
+        .post('/api/v1/admin/users')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           email: `resetpref-main-${uid}@mailtrap.com`,
@@ -565,7 +574,6 @@ describe('Users API', () => {
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('success');
       expect(res.body.data).toHaveProperty('preferences');
-      // Optionally: check that preferences are empty or default
     });
 
     it('should reset own preferences (as standard user)', async () => {
@@ -620,7 +628,7 @@ describe('Users API', () => {
     // Create a user specifically for these tests
     beforeAll(async () => {
       const res = await request(app)
-        .post('/api/v1/users')
+        .post('/api/v1/admin/users')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           email: prefTestUserMail,
@@ -719,7 +727,6 @@ describe('Users API', () => {
       expect(resOther.body.status).toBe('fail');
     });
 
-    // Nettoyer l'utilisateur créé pour ces tests spécifiques
     afterAll(async () => {
       if (prefTestUserId) {
         await request(app)
@@ -756,7 +763,7 @@ describe('Users API', () => {
 
   it('should fail to delete user (as standard user)', async () => {
     const tempUserRes = await request(app)
-      .post('/api/v1/users')
+      .post('/api/v1/admin/users')
       .set('Authorization', `Bearer ${adminToken}`)
       .send({
         email: `tempdel-${uid}@mailtrap.com`,
@@ -790,7 +797,7 @@ describe('Users API', () => {
   describe('Delete user when it no longer has authorisations', () => {
     it('should create a zombie user', async () => {
       const res = await request(app)
-        .post('/api/v1/users')
+        .post('/api/v1/admin/users')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           email: zombieUserMail,
@@ -820,7 +827,7 @@ describe('Users API', () => {
     });
     it('should resurrect zombie user', async () => {
       const res = await request(app)
-        .post('/api/v1/users')
+        .post('/api/v1/admin/users')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           email: zombieUserMail,

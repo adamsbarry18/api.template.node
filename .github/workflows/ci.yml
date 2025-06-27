@@ -3,7 +3,6 @@ name: CI/CD Pipeline
 on:
   push:
     branches: ['main', 'dev']
-  # AJOUTEZ OU ASSUREZ-VOUS QUE CE BLOC EST PRÉSENT
   pull_request:
     branches: ['main', 'dev']
     # types: [opened, reopened, synchronize, ready_for_review] # Vous pouvez affiner les types si besoin
@@ -118,27 +117,3 @@ jobs:
   # ===========================================
   # Job: Deploy (Manual Trigger)
   # ===========================================
-  deploy:
-    name: Deploy Application
-    runs-on: ubuntu-latest
-    # Ne s'exécute que sur déclenchement manuel ('workflow_dispatch')
-    # et après succès du job 'build-and-push-docker' (donc implicitement sur 'main')
-    if: github.event_name == 'workflow_dispatch'
-    needs: build-and-push-docker
-
-    environment: production # Optionnel: Définit un environnement pour les secrets/règles
-
-    steps:
-      - name: Checkout repository (si nécessaire pour les scripts de déploiement)
-        uses: actions/checkout@v4
-        with:
-          ref: main # Assurez-vous de déployer depuis main
-
-      - name: Placeholder for Deployment Steps
-        run: |
-          echo "Deployment triggered manually for branch: ${{ github.ref }}"
-          echo "Image to deploy (example): ghcr.io/${{ github.repository }}:latest" # Nom d'image GHCR
-          echo "Add your deployment steps here (e.g., SSH, kubectl, serverless deploy, etc.)"
-          # Exemple:
-          # ssh user@your-server "docker pull your-image:latest && docker stop your-container && docker rm your-container && docker run -d --name your-container your-image:latest"
-          # kubectl set image deployment/your-deployment your-container=your-image:latest -n your-namespace

@@ -9,8 +9,9 @@ describe('Authorization API', () => {
   const testEmail = `auth-test-user-${Date.now()}@mailtrap.com`;
 
   beforeAll(async () => {
+    // Use the new admin route to create users with specific levels for testing setup
     const res = await request(app)
-      .post('/api/v1/users')
+      .post('/api/v1/admin/users')
       .set('Authorization', `Bearer ${adminToken}`)
       .send({
         email: testEmail,

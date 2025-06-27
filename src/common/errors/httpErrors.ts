@@ -19,7 +19,7 @@ export enum ErrorStatus {
   ERR_VALIDATION = 400,
   ERR_BAD_REQUEST = 400,
   ERR_PWD_IDENTICAL = 400,
-  ERR_DEPENDENCY = 400,
+  ERR_DEPENDENCY = 409,
   ERR_UNAUTHORIZED = 401,
   ERR_PWD_EXPIRED = 403,
   ERR_FORBIDDEN = 403,
@@ -46,12 +46,12 @@ export class BaseError extends Error {
    */
   constructor(
     code: ErrorCode = 'ERR_OTHER',
-    message = 'An error occurred...',
+    message: string | null = 'An error occurred...', // Allow null for message in constructor
     data: string | string[] | object | null = null,
   ) {
-    super(message);
+    super(message ?? 'An error occurred...'); // Pass a non-null string to super
     this.code = code;
-    this.message = message;
+    this.message = message ?? 'An error occurred...'; // Ensure this.message is always a string
     this.status = ErrorStatus.hasOwnProperty(code) ? ErrorStatus[code] : 500;
     this.data = data;
     this.name = this.constructor.name;
@@ -75,7 +75,7 @@ export class BadRequestError extends BaseError {
 export class DependencyError extends BaseError {
   data!: DependentWrapper[];
   constructor(dependents: DependentWrapper[] = []) {
-    super('ERR_DEPENDENCY', 'Bad request', dependents);
+    super('ERR_DEPENDENCY', 'Conflict due to dependencies', dependents);
   }
 }
 

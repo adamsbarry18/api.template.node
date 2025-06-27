@@ -1,12 +1,21 @@
-import { Errors, ParameterError, UnauthorizedError } from '@/common/errors/httpErrors';
+import passport from 'passport';
+import {
+  BaseError,
+  Errors,
+  ParameterError,
+  ServerError,
+  UnauthorizedError,
+} from '@/common/errors/httpErrors';
 import { BaseRouter } from '@/common/routing/BaseRouter';
-import { Post, Put, authorize, internal } from '@/common/routing/decorators';
+import { Get, Post, Put, authorize, internal } from '@/common/routing/decorators'; // Added Get
 import { Request, Response, NextFunction } from '@/config/http';
 
 import { LoginService } from './services/login.services';
 import { PasswordService } from './services/password.services';
-import { SecurityLevel } from '../users/models/users.entity';
+import { SecurityLevel } from '@/modules/users/models/users.entity';
 import { AuthorizationService } from './services/authorization.service';
+import logger from '@/lib/logger';
+import config from '@/config';
 export default class LoginRouter extends BaseRouter {
   loginService = LoginService.getInstance();
   passwordService = PasswordService.getInstance();
@@ -112,7 +121,7 @@ export default class LoginRouter extends BaseRouter {
     const referer = req.headers.referer;
 
     if (!email) {
-      // Correction : retourne un 400 si email manquant
+      // Correction: returns a 400 if email is missing
       return res.jsend.fail('Parameter email not found');
     }
 
@@ -156,7 +165,7 @@ export default class LoginRouter extends BaseRouter {
     const { password } = req.body;
     const { code } = req.params;
 
-    if (!code || code.length != 32) return res.jsend.fail('No confirm code');
+    if (!code || code.length !== 32) return res.jsend.fail('No confirm code');
 
     await this.pipe(res, req, next, async () => {
       await this.passwordService.resetPasswordWithCode(code, password);
@@ -189,7 +198,7 @@ export default class LoginRouter extends BaseRouter {
   @Post('/auth/password/:code/confirm')
   async confirmPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
     const { code } = req.params;
-    if (!code || code.length != 32) return res.jsend.fail('No confirm code');
+    if (!code || code.length !== 32) return res.jsend.fail('No confirm code');
     await this.pipe(res, req, next, async () => {
       await this.passwordService.confirmPasswordChange(code);
       return { message: 'Password confirmed successfully' };
@@ -363,5 +372,124 @@ export default class LoginRouter extends BaseRouter {
     }
 
     await this.pipe(res, req, next, () => this.loginService.generateTokenForUser(userId), 200);
+  }
+
+  /**
+   * @openapi
+   * /auth/google:
+   *   get:
+   *     summary: Initiate Google OAuth authentication
+   *     tags:
+   *       - Authentication (OAuth)
+   *     responses:
+   *       302:
+   *         description: Redirects to Google's authentication page.
+   */
+  @Get('/auth/google')
+  initiateGoogleAuth(req: Request, res: Response, next: NextFunction): void {
+    // The 'google' string here refers to the strategy name we used in passportAuthenticationMiddleware
+    passport.authenticate('google', { scope: ['profile', 'email'], session: false })(
+      req,
+      res,
+      next,
+    );
+  }
+
+  /**
+   * @openapi
+   * /auth/google/callback:
+   *   get:
+   *     summary: Google OAuth callback URL
+   *     tags:
+   *       - Authentication (OAuth)
+   *     parameters:
+   *       - in: query
+   *         name: code
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The authorization code from Google.
+   *       - in: query
+   *         name: scope
+   *         schema:
+   *           type: string
+   *         description: Scopes granted by Google.
+   *     responses:
+   *       200:
+   *         description: Authentication successful, returns JWT token.
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 token:
+   *                   type: string
+   *                 user:
+   *                   $ref: '#/components/schemas/UserApiResponse'
+   *       401:
+   *         description: Authentication failed.
+   *       500:
+   *         description: Server error during authentication.
+   */
+  @Get('/auth/google/callback')
+  handleGoogleCallback(req: Request, res: Response, next: NextFunction): void {
+    passport.authenticate(
+      'google',
+      { session: false },
+      async (err: any, user: Express.User | false | null, info: any) => {
+        if (err) {
+          logger.error(err, 'Google OAuth strategy error in callback');
+          return next(
+            err instanceof BaseError
+              ? err
+              : new ServerError('Google authentication processing error.'),
+          );
+        }
+
+        if (!user || !user.id) {
+          return res.jsend.fail({
+            message: 'Google authentication failed. User not processed or access denied.',
+            details: info?.message || 'No specific error message from provider.',
+          });
+        }
+
+        try {
+          const tokenPayload = await this.loginService.generateTokenForUser(user.id);
+          const frontendUrl = config.FRONTEND_URL || 'http://localhost:8080'; // Fallback in case config.FRONTEND_URL is not defined
+
+          // Redirect to the frontend with the token and user information
+          // The frontend will need a page or logic to handle this callback
+          const userApiResponse = this.loginService.usersService.mapToApiResponse(user);
+          if (!userApiResponse) {
+            logger.error('Failed to map user to API response during Google callback');
+            return next(
+              new ServerError('Failed to process user data after Google authentication.'),
+            );
+          }
+
+          // Encode user data to pass in URL if needed, or just the token
+          // For simplicity, we will redirect to the login page
+          // with parameters that Login.vue can intercept.
+          // Alternatively, create a dedicated /auth/google/frontend-callback route on the frontend.
+
+          // Ensure that config.FRONTEND_URL is defined in your backend .env
+          // For example: FRONTEND_URL=http://localhost:8080
+          if (!config.FRONTEND_URL) {
+            logger.warn(
+              'FRONTEND_URL is not defined in backend config. Defaulting to http://localhost:8080 for redirection. This might not be correct for production.',
+            );
+          }
+
+          // Redirects to the frontend login page with the token and a flag
+          // Login.vue will need to be adapted to read these parameters
+          res.redirect(
+            `${frontendUrl}/?google_auth_token=${tokenPayload.token}&google_auth_success=true`,
+          );
+        } catch (serviceError) {
+          logger.error(serviceError, 'Error generating token after Google OAuth success');
+          next(new ServerError('Failed to finalize login after Google authentication.'));
+        }
+      },
+    )(req, res, next);
   }
 }

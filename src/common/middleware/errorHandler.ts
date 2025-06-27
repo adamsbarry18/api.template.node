@@ -6,19 +6,30 @@ import logger from '@/lib/logger';
 import { type Request, type Response, type NextFunction } from '../../config/http';
 import { BaseError, ServerError, ValidationError } from '../errors/httpErrors';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const errorHandler = (
   err: Error,
   req: Request,
   res: Response,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _next: NextFunction,
 ): void => {
   let error: BaseError;
 
+  // Log détaillé de l'erreur, même en production
+  // Affiche toutes les propriétés de l'objet Error
+  // eslint-disable-next-line no-console
+  if (config.NODE_ENV === 'production') {
+    console.error('Erreur API détaillée:', JSON.stringify(err, Object.getOwnPropertyNames(err)));
+  }
+
   logger.error(
     {
-      err,
-      stack: err.stack,
+      err: err instanceof Error ? {
+        ...err, // d'abord toutes les props custom
+        name: err.name,
+        message: err.message,
+        stack: err.stack,
+      } : err,
       url: req.originalUrl,
       method: req.method,
       ip: req.ip,

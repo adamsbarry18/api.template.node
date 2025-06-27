@@ -25,10 +25,13 @@ let isShuttingDown = false;
  */
 process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
   logger.fatal({ promise, reason }, '💥 Unhandled Rejection at Promise. Forcing shutdown...');
-  gracefulShutdown('unhandledRejection').catch(() => process.exit(1));
+  gracefulShutdown('unhandledRejection').catch((err) => {
+    logger.fatal({ err }, 'Error during graceful shutdown after unhandledRejection.');
+    throw err;
+  });
   setTimeout(() => {
     logger.fatal('Graceful shutdown timed out after unhandledRejection. Forcing exit.');
-    process.exit(1);
+    throw new Error('Graceful shutdown timed out after unhandledRejection.');
   }, SHUTDOWN_TIMEOUT_MS);
 });
 
@@ -38,10 +41,13 @@ process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) =>
  */
 process.on('uncaughtException', (error: Error) => {
   logger.fatal(error, '💥 Uncaught Exception thrown. Forcing shutdown...');
-  gracefulShutdown('uncaughtException').catch(() => process.exit(1));
+  gracefulShutdown('uncaughtException').catch((err) => {
+    logger.fatal({ err }, 'Error during graceful shutdown after uncaughtException.');
+    throw err;
+  });
   setTimeout(() => {
     logger.fatal('Graceful shutdown timed out after uncaughtException. Forcing exit.');
-    process.exit(1);
+    throw new Error('Graceful shutdown timed out after uncaughtException.');
   }, SHUTDOWN_TIMEOUT_MS);
 });
 
@@ -74,10 +80,21 @@ async function initializeExternalConnections(): Promise<void> {
 
     logger.info('External connections initialization complete.');
   } catch (error: unknown) {
-    logger.fatal(
-      { err: error },
-      '❌ Critical error during external connections initialization. Exiting.',
-    );
+    if (error instanceof Error) {
+      logger.fatal(
+        { name: error.name, message: error.message, stack: error.stack },
+        '❌ Critical error during external connections initialization. Exiting.',
+      );
+      // Fallback: print to console for visibility
+      console.error('FATAL:', error.name, error.message, error.stack);
+    } else {
+      logger.fatal(
+        { err: error },
+        '❌ Critical error during external connections initialization. Exiting.',
+      );
+      // Fallback: print to console for visibility
+      console.error('FATAL:', error);
+    }
     throw error; // Re-throw critical errors to stop the startup process
   }
 }
@@ -85,9 +102,9 @@ async function initializeExternalConnections(): Promise<void> {
 /**
  * Handles the graceful shutdown of the application.
  * Closes the HTTP server and external connections.
- * @param {NodeJS.Signals | string} signal - The signal received or the reason for shutdown.
+ * @param {string} signal - The signal received or the reason for shutdown.
  */
-async function gracefulShutdown(signal: NodeJS.Signals | string): Promise<void> {
+async function gracefulShutdown(signal: string): Promise<void> {
   if (isShuttingDown) {
     logger.warn(`Shutdown already in progress. Received another signal: ${signal}`);
     return;
@@ -151,7 +168,9 @@ async function gracefulShutdown(signal: NodeJS.Signals | string): Promise<void> 
   await Promise.allSettled(closePromises);
 
   logger.info(`🏁 Graceful shutdown finished. Exiting with code ${exitCode}.`);
-  process.exit(exitCode);
+  if (exitCode !== 0) {
+    throw new Error(`Application exited with code ${exitCode}`);
+  }
 }
 
 /**
@@ -176,26 +195,31 @@ async function startServer(): Promise<void> {
   server.on('error', (error: NodeJS.ErrnoException) => {
     logger.fatal({ err: error }, '❌ HTTP server error');
     if (error.syscall !== 'listen') {
-      gracefulShutdown('serverError').catch(() => process.exit(1));
+      gracefulShutdown('serverError').catch((err) => {
+        logger.fatal({ err }, 'Error during graceful shutdown after server error.');
+        throw err;
+      });
       return;
     }
+    let errorMessage = '';
     switch (error.code) {
       case 'EACCES':
-        logger.fatal(`Port ${config.PORT} requires elevated privileges. Exiting.`);
+        errorMessage = `Port ${config.PORT} requires elevated privileges.`;
         break;
       case 'EADDRINUSE':
-        logger.fatal(`Port ${config.PORT} is already in use. Exiting.`);
+        errorMessage = `Port ${config.PORT} is already in use.`;
         break;
       default:
-        logger.fatal(`Unhandled listen error: ${error.code}. Exiting.`);
+        errorMessage = `Unhandled listen error: ${error.code}.`;
     }
-    process.exit(1); // Exit immediately for listen errors
+    logger.fatal(errorMessage + ' Exiting.');
+    throw new Error(errorMessage); // Throw error immediately for listen errors
   });
 
   // Start listening for connections
   server.listen(config.PORT, config.HOST, () => {
     const redisClient = getRedisClient();
-    const apiUrl = config.API_URL || `http://${config.HOST}:${config.PORT}`;
+    const apiUrl = config.API_URL ?? `http://${config.HOST}:${config.PORT}`;
 
     logger.info('=======================================================');
     logger.info(`✅ Server listening on http://${config.HOST}:${config.PORT}`);
@@ -204,9 +228,7 @@ async function startServer(): Promise<void> {
     logger.info(
       `   Database: ${config.DB_TYPE} on ${config.DB_HOST}:${config.DB_PORT}:${config.DB_NAME} (${appDataSource.isInitialized ? 'Connected' : 'Disconnected'})`,
     );
-    logger.info(
-      `   Redis: ${redisClient?.isOpen ? 'Connected' : 'Disconnected'} to ${config.REDIS_HOST}:${config.REDIS_PORT}`,
-    );
+    logger.info(`   Redis: ${redisClient?.isOpen ? 'Connected' : 'Disconnected'}`);
     logger.info('=======================================================');
   });
 
@@ -221,6 +243,13 @@ async function startServer(): Promise<void> {
 
 // --- Application Startup ---
 startServer().catch((error: unknown) => {
-  logger.fatal({ err: error }, '💥 Critical error during server startup sequence. Exiting.');
-  process.exit(1);
+  if (error instanceof Error) {
+    logger.fatal(
+      { name: error.name, message: error.message, stack: error.stack },
+      '💥 Critical error during server startup sequence. Exiting.',
+    );
+  } else {
+    logger.fatal({ err: error }, '💥 Critical error during server startup sequence. Exiting.');
+  }
+  throw error;
 });

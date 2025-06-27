@@ -15,6 +15,7 @@ import { Request, Response, NextFunction } from '@/config/http';
 
 import { SecurityLevel } from './models/users.entity';
 import { UsersService } from './services/users.services';
+import { buildTypeORMCriteria } from '@/common/utils/queryParsingUtils';
 
 export default class UserRouter extends BaseRouter {
   usersService = UsersService.getInstance();
@@ -33,12 +34,46 @@ export default class UserRouter extends BaseRouter {
    *         name: page
    *         schema:
    *           type: integer
+   *           default: 1
    *         description: Page number for pagination
    *       - in: query
    *         name: limit
    *         schema:
    *           type: integer
+   *           default: 20
    *         description: Number of items per page
+   *       - in: query
+   *         name: sortBy
+   *         schema:
+   *           type: string
+   *         description: Field to sort by (e.g., "createdAt")
+   *       - in: query
+   *         name: order
+   *         schema:
+   *           type: string
+   *           enum: [asc, desc]
+   *           default: desc
+   *         description: Sort order
+   *       - in: query
+   *         name: level
+   *         schema:
+   *           type: string
+   *         description: Filter by user level (applied as filter[level]=value)
+   *       - in: query
+   *         name: internal
+   *         schema:
+   *           type: boolean
+   *         description: Filter by internal status (applied as filter[internal]=value)
+   *       - in: query
+   *         name: email
+   *         schema:
+   *           type: string
+   *         description: Filter by email (applied as filter[email]=value)
+   *       - in: query
+   *         name: q
+   *         schema:
+   *           type: string
+   *         description: Search term for email, firstName, lastName
    *     responses:
    *       200:
    *         description: List of users
@@ -50,10 +85,14 @@ export default class UserRouter extends BaseRouter {
   @filterable(['level', 'internal', 'email'])
   @searchable(['email', 'firstName', 'lastName'])
   async getAllUsers(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const { filters, sort } = buildTypeORMCriteria(req);
+
     await this.pipe(res, req, next, () =>
       this.usersService.findAll({
         limit: req.pagination?.limit,
         offset: req.pagination?.offset,
+        filters,
+        sort,
       }),
     );
   }
@@ -196,16 +235,47 @@ export default class UserRouter extends BaseRouter {
    *         description: Invalid data
    */
   @Post('/users')
-  @authorize({ level: SecurityLevel.ADMIN })
   async createUser(req: Request, res: Response, next: NextFunction): Promise<void> {
     const userInput = req.body;
-    await this.pipe(
-      res,
-      req,
-      next,
-      () => this.usersService.create(userInput, { requestingUser: req.user }),
-      201,
-    );
+    await this.pipe(res, req, next, () => this.usersService.create(userInput), 201);
+  }
+
+  /**
+   * @openapi
+   * /admin/users:
+   *   post:
+   *     summary: Create a new user (Admin Panel)
+   *     description: Allows an administrator to create a new user with a specific security level and internal status. Intended for use via an admin panel or similar privileged interface.
+   *     tags:
+   *       - Users
+   *       - Admin
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             $ref: '#/components/schemas/UserInput' # UserInput schema should include 'level' and 'internal'
+   *     responses:
+   *       201:
+   *         description: User created successfully by admin.
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/UserApiResponse'
+   *       400:
+   *         description: Invalid data provided (e.g., invalid level, email already exists).
+   *       401:
+   *         description: Unauthorized (Missing or invalid token).
+   *       403:
+   *         description: Forbidden (User making the request is not an admin).
+   */
+  @Post('/admin/users')
+  @authorize({ level: SecurityLevel.ADMIN })
+  async createUserByAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const userInput = req.body;
+    await this.pipe(res, req, next, () => this.usersService.createByAdmin(userInput), 201);
   }
 
   /**
@@ -250,9 +320,7 @@ export default class UserRouter extends BaseRouter {
     ) {
       return next(new ForbiddenError('Insufficient permissions to update this user.'));
     }
-    await this.pipe(res, req, next, () =>
-      this.usersService.update(userIdToUpdate, updateData, { requestingUser: req.user }),
-    );
+    await this.pipe(res, req, next, () => this.usersService.update(userIdToUpdate, updateData));
   }
 
   /**
@@ -292,7 +360,7 @@ export default class UserRouter extends BaseRouter {
       req,
       next,
       async () => {
-        await this.usersService.delete(userIdToDelete, { requestingUser: req.user });
+        await this.usersService.delete(userIdToDelete);
         return 'Successfull deletion';
       },
       200,

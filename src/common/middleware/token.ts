@@ -34,9 +34,7 @@ export default function tokenMiddleware(): ExpressMiddleware {
   return async (req: Request, response: Response, next: NextFunction) => {
     const token = getToken(req) as any;
     if (token && typeof token === 'object') {
-      if (!req.user) {
-        req.user = {} as User;
-      }
+      req.user ??= {} as User;
       req.user.authToken = token;
       if (token.clientId) {
         req.user.tokenClientId = token.clientId;

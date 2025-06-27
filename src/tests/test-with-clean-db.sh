@@ -2,6 +2,7 @@
 # Bash script to ensure a clean DB for each test run (for WSL/Linux)
 # Usage: ./test-with-clean-db.sh
 
+# Exit immediately if a command exits with a non-zero status.
 set -e
 
 # Stop and remove containers/volumes

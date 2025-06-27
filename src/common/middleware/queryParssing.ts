@@ -1,7 +1,16 @@
 import { type Request, type Response, type NextFunction } from '@/config/http';
-import logger from '@/lib/logger';
 
 import { BadRequestError } from '../errors/httpErrors';
+
+export enum FilterOperator {
+  EQ = 'eq',
+  LT = 'lt',
+  LTE = 'lte',
+  GT = 'gt',
+  GTE = 'gte',
+  IN = 'in',
+  CONTAINS = 'contains',
+}
 
 const DEFAULT_PAGE_LIMIT = 10;
 const MAX_PAGE_LIMIT = 100;
@@ -105,27 +114,68 @@ export const parseFiltering =
   (allowedFields: boolean | string[] = true) =>
   (req: Request, res: Response, next: NextFunction): void => {
     req.filters = [];
+    const filters: FilterInfo[] = req.filters;
 
-    if (req.query.filter && typeof req.query.filter === 'object') {
-      logger.debug({ filtersQuery: req.query.filter }, 'Parsing filters...');
-      Object.entries(req.query.filter).forEach(([field, value]) => {
-        if (Array.isArray(allowedFields) && !allowedFields.includes(field)) {
-          logger.warn(`Filtering ignored for unauthorized field: ${field}`);
-          return;
-        }
+    const queryParams = req.query;
 
-        if (allowedFields === false) return;
+    Object.entries(queryParams).forEach(([field, value]) => {
+      // Ignore pagination, sorting, search, and order parameters
+      if (['page', 'limit', 'sortBy', 'sortOrder', 'q', 'order'].includes(field)) {
+        return;
+      }
 
-        if (req.filters) {
-          req.filters.push({
-            field,
-            operator: 'eq',
-            value,
+      // Handle nested filter object format (e.g., ?filter[city]=Paris&filter[isActive]=true)
+      if (field === 'filter' && typeof value === 'object') {
+        Object.entries(value as Record<string, any>).forEach(([filterField, filterValue]) => {
+          if (Array.isArray(allowedFields) && !allowedFields.includes(filterField)) {
+            return;
+          }
+
+          if (allowedFields === false) return;
+
+          let parsedValue: any = filterValue;
+          // Attempt to convert string 'true' or 'false' to boolean
+          if (typeof filterValue === 'string') {
+            if (filterValue.toLowerCase() === 'true') {
+              parsedValue = true;
+            } else if (filterValue.toLowerCase() === 'false') {
+              parsedValue = false;
+            }
+          }
+
+          filters.push({
+            field: filterField,
+            operator: FilterOperator.EQ, // Assuming 'eq' operator for simplicity
+            value: parsedValue,
           });
-        }
-      });
-    }
+        });
+        return;
+      }
 
+      // Handle top-level filter parameters (e.g., ?city=Paris&isActive=true)
+      if (Array.isArray(allowedFields) && !allowedFields.includes(field)) {
+        return;
+      }
+
+      if (allowedFields === false) return;
+
+      if (value !== undefined && value !== null) {
+        let parsedValue: any = value;
+        // Attempt to convert string 'true' or 'false' to boolean
+        if (typeof value === 'string') {
+          if (value.toLowerCase() === 'true') {
+            parsedValue = true;
+          } else if (value.toLowerCase() === 'false') {
+            parsedValue = false;
+          }
+        }
+        filters.push({
+          field,
+          operator: FilterOperator.EQ,
+          value: parsedValue,
+        });
+      }
+    });
     next();
   };
 
@@ -140,8 +190,8 @@ export const parseFiltering =
 export const parseSearch =
   (allowedFields: boolean | string[] = true) =>
   (req: Request, res: Response, next: NextFunction): void => {
-    if (req.query.search && typeof req.query.search === 'string' && allowedFields) {
-      req.searchQuery = req.query.search.trim();
+    if (req.query.q && typeof req.query.q === 'string' && allowedFields) {
+      req.searchQuery = req.query.q.trim();
     }
 
     next();
