@@ -3,7 +3,6 @@ name: CI/CD Pipeline
 on:
   push:
     branches: ['main', 'dev']
-
   pull_request:
     branches: ['main', 'dev']
     # types: [opened, reopened, synchronize, ready_for_review] # Vous pouvez affiner les types si besoin
@@ -60,3 +59,61 @@ jobs:
       - name: Stop test services
         if: always()
         run: docker compose -f src/tests/docker-compose.yml down -v
+
+  # ==========================================
+  # Job: Build and Push Docker Image
+  # ==========================================
+  build-and-push-docker:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    # Ne s'exécute que sur push vers 'main' et après succès du job 'test'
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') && github.event_name == 'push'
+    needs: test
+
+    # Accorde les permissions nécessaires pour lire le contenu et écrire des packages (images Docker)
+    permissions:
+      contents: read # Nécessaire pour actions/checkout
+      packages: write # Nécessaire pour pusher vers GHCR
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          # Utilise le token fourni automatiquement par GitHub Actions
+          username: ${{ github.actor }} # L'utilisateur qui a déclenché le workflow
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          # Construit le nom de l'image pour GHCR: ghcr.io/owner/repo
+          # Vous pouvez ajouter un nom d'image spécifique si besoin: ghcr.io/${{ github.repository }}/api
+          images: ghcr.io/${{ github.repository }} # Ex: ghcr.io/adamsbarry18/api.template.node
+          tags: |
+            type=sha,prefix=,suffix=,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ===========================================
+  # Job: Deploy (Manual Trigger)
+  # ===========================================
