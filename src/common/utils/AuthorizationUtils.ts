@@ -29,9 +29,6 @@ export class AuthorizationUtils {
           const actionsToEncode = permissions[featureName];
 
           if (!Array.isArray(actionsToEncode)) {
-            logger.warn(
-              `Encode: Actions for feature '${featureName}' is not an array. Skipping feature.`,
-            );
             continue;
           }
 
@@ -39,22 +36,12 @@ export class AuthorizationUtils {
             const actionConfig = rawFlagsConfig[action];
             if (actionConfig) {
               currentMask |= actionConfig.value;
-            } else {
-              logger.warn(
-                `Encode: Unknown action '${action}' in feature '${featureName}'. Skipping action.`,
-              );
             }
           });
 
           if (currentMask > 0) {
             featureMasks.set(featureConfig.id, currentMask);
-          } else {
-            logger.debug(
-              `Encode: No valid actions provided for feature '${featureName}', resulting mask is 0. Not storing override.`,
-            );
           }
-        } else {
-          logger.warn(`Encode: Unknown feature name '${featureName}'. Skipping feature.`);
         }
       }
     }
@@ -80,7 +67,6 @@ export class AuthorizationUtils {
           featureId > 0xffff ||
           isNaN(featureId)
         ) {
-          logger.warn(`Invalid Feature ID ${featureId}. Skipping.`);
           return;
         }
         if (
@@ -89,9 +75,6 @@ export class AuthorizationUtils {
           permissionMask > 0xffff ||
           isNaN(permissionMask)
         ) {
-          logger.warn(
-            `Invalid Permission mask ${permissionMask} for feature ${featureId}. Clamping to 0-65535.`,
-          );
           permissionMask = Math.max(0, Math.min(permissionMask, 0xffff));
         }
 

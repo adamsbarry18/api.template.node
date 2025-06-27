@@ -56,7 +56,7 @@ export const sendMail = async (options: MailOptions): Promise<void> => {
   }
 
   const mailDefaults = {
-    from: options.from || config.MAIL_FROM,
+    from: options.from ?? config.MAIL_FROM,
   };
 
   try {

@@ -1,4 +1,5 @@
 #!/bin/bash
-set -e
-echo "==> Build de l'image Docker de l'API"
+set -euo pipefail
+
+echo "==> Building the Docker image for the API..."
 docker-compose build api

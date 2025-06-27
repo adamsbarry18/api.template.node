@@ -1,9 +1,9 @@
-import { type Logger } from 'pino';
-
 import { type Request, type Response, type NextFunction } from '@/config/http';
-import logger from '@/lib/logger';
 
 import { type FilterInfo, type PaginationInfo, type SortInfo } from '../middleware/queryParssing';
+import logger from '@/lib/logger';
+import config from '@/config';
+import { BaseError } from '../errors/httpErrors';
 
 /**
  * Extends the Express Request interface to include properties
@@ -34,8 +34,6 @@ interface SuccessResponse<T> {
  * Abstract base class for controllers, providing common utilities.
  */
 export abstract class BaseRouter {
-  protected readonly logger: Logger = logger;
-
   /**
    * Executes an asynchronous business logic function, formats the standardized success response
    * (including request metadata if present), and delegates errors to the global handler via next().
@@ -91,7 +89,21 @@ export abstract class BaseRouter {
       };
       res.status(statusCode).json(responseBody);
     } catch (error) {
-      this.logger.error(error, `Error during piped execution for ${req.method} ${req.path}`);
+      // En mode test, ne pas logger les erreurs attendues (NotFoundError, BadRequestError, DependencyError)
+      const isExpectedTestError =
+        config.NODE_ENV === 'test' &&
+        error instanceof BaseError &&
+        [
+          'ERR_NOT_FOUND',
+          'ERR_BAD_REQUEST',
+          'ERR_FORBIDDEN',
+          'ERR_UNAUTHORIZED',
+          'ERR_DEPENDENCY',
+        ].includes(error.code);
+
+      if (!isExpectedTestError) {
+        logger.error(error, `Error during piped execution for ${req.method} ${req.path}`);
+      }
       next(error);
     }
   }

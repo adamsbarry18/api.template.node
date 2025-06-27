@@ -17,7 +17,7 @@ const TOKEN_DEFAULT_EXPIRE_SECONDS = 60 * 60 * 24 * 30; // 30 days
 let instance: LoginService | null = null;
 
 export class LoginService {
-  private readonly usersService: UsersService;
+  public readonly usersService: UsersService; // Made public
   private readonly passwordService: PasswordService;
 
   constructor(
@@ -56,14 +56,10 @@ export class LoginService {
     }
 
     if (!user.isActive) {
-      logger.warn(`Login attempt for inactive user ID: ${user.id} (${user.email}).`);
       throw new UnauthorizedError('Account is inactive.');
     }
 
     if (user.permissionsExpireAt && dayjs(user.permissionsExpireAt).isBefore(dayjs())) {
-      logger.warn(
-        `Login attempt for user ID: ${user.id} (${user.email}) whose permissions have expired on ${user.permissionsExpireAt.toISOString()}.`,
-      );
       throw new UnauthorizedError('Account permissions have expired.');
     }
 
@@ -88,7 +84,7 @@ export class LoginService {
       throw error;
     }
 
-    const token = await this.signToken(user.id, { level: user.level, internal: user.internal });
+    const token = this.signToken(user.id, { level: user.level, internal: user.internal });
     const userApi = this.usersService.mapToApiResponse(user);
     if (!userApi) {
       throw new ServerError('Failed to map user data');
@@ -111,7 +107,7 @@ export class LoginService {
    * @param extraPayload Additional payload to include in the token.
    * @returns The signed JWT token.
    */
-  async signToken(userId: number, extraPayload: Record<string, any> = {}): Promise<string> {
+  signToken(userId: number, extraPayload: Record<string, any> = {}): string {
     const payload = { sub: userId, ...extraPayload };
     try {
       return jwt.sign(payload, config.JWT_SECRET, { expiresIn: TOKEN_DEFAULT_EXPIRE_SECONDS });
@@ -153,9 +149,6 @@ export class LoginService {
     try {
       const res = await redisClient.get(redisKey);
       const isInvalidated = !!res;
-      logger.debug(
-        `Token invalidation check for key ${redisKey}: ${isInvalidated ? 'Invalidated' : 'Valid'}`,
-      );
       return isInvalidated;
     } catch (error) {
       logger.error(error, `Redis error checking token invalidation for key ${redisKey}`);
@@ -166,12 +159,16 @@ export class LoginService {
   /**
    * Generates a new token for a given user.
    * @param userId The user ID.
-   * @returns An object containing the new token.
+   * @returns An object containing the new token and its expiration time in seconds.
    */
-  async generateTokenForUser(userId: number): Promise<{ token: string }> {
+  async generateTokenForUser(userId: number): Promise<{ token: string; expiresIn: number }> {
     const user = await this.usersService.findById(userId);
-    const token = await this.signToken(user.id, { level: user.level, internal: user.internal });
-    return { token };
+    if (!user) {
+      // Defensive check, though findById should throw if not found
+      throw new ServerError(`User not found for ID ${userId} when generating token.`);
+    }
+    const token = this.signToken(user.id, { level: user.level, internal: user.internal });
+    return { token, expiresIn: TOKEN_DEFAULT_EXPIRE_SECONDS };
   }
 
   /**
@@ -200,7 +197,7 @@ export class LoginService {
       throw new ServerError('Failed to fetch user after password update');
     }
 
-    return await this.signToken(user.id, { level: user.level, internal: user.internal });
+    return this.signToken(user.id, { level: user.level, internal: user.internal });
   }
 
   /**

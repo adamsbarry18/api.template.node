@@ -1,5 +1,4 @@
 import {
-  BaseEntity,
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
@@ -10,20 +9,23 @@ import {
   AfterUpdate,
   BeforeSoftRemove,
   AfterSoftRemove,
+  JoinColumn,
 } from 'typeorm';
 
 import logger from '@/lib/logger';
 import { getRedisClient } from '@/lib/redis';
+import dayjs from 'dayjs';
 
-interface IModelDiff {
-  changed: string[];
-  newValues: Record<string, any>;
-}
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 /**
  * Classe de base pour les entités TypeORM, fournissant validation, gestion du cache et sérialisation.
  */
-export abstract class Model extends BaseEntity {
+export abstract class Model {
   @PrimaryGeneratedColumn({ name: 'id' })
   id!: number;
 
@@ -33,61 +35,29 @@ export abstract class Model extends BaseEntity {
   @UpdateDateColumn({ type: 'timestamp', name: 'updated_time' })
   updatedAt!: Date;
 
-  @DeleteDateColumn({ type: 'timestamp', name: 'deleted_time', nullable: true })
-  deletedAt!: Date | null;
+  @JoinColumn({ name: 'created_by_user_id' })
+  createdByUserId?: number | null;
 
-  // Propriétés statiques
-  static entityTrackedFields: string[] = [];
+  @JoinColumn({ name: 'updated_by_user_id' })
+  updatedByUserId?: number | null;
+
+  @DeleteDateColumn({ type: 'timestamp', name: 'deleted_time', nullable: true })
+  deletedAt?: Date | null;
 
   /**
    * Formate une date en ISO ou retourne null.
    */
-  protected static formatISODate(date: Date | string | null): string | null {
+  static formatISODate(date: Date | null | undefined): string | null {
     if (!date) return null;
-
-    if (date instanceof Date && !isNaN(date.getTime())) {
-      return date.toISOString();
-    }
-
-    if (typeof date === 'string') {
-      const parsedDate = new Date(date);
-      if (!isNaN(parsedDate.getTime())) {
-        return parsedDate.toISOString();
-      }
-    }
-
-    return null;
+    return dayjs(date).toISOString();
   }
 
   /**
-   * Retourne l'identifiant unique de l'entité
+   * Normalized entity id for user entity changelog
+   * @returns Normalized identifier
    */
   get entityIdentifier(): string {
     return `${this.id}`;
-  }
-
-  /**
-   * Calcule les différences entre l'état actuel de l'entité et un nouveau modèle
-   */
-  getDiff(model: Partial<this>): IModelDiff {
-    const diff: IModelDiff = { changed: [], newValues: {} };
-    const constructor = this.constructor as typeof Model;
-
-    for (const key of Object.keys(model)) {
-      if (Object.prototype.hasOwnProperty.call(this, key)) {
-        const current = (this as any)[key];
-        const newValue = (model as any)[key];
-
-        if (current !== newValue && (current != null || newValue != null)) {
-          diff.changed.push(key);
-          if (constructor.entityTrackedFields.includes(key)) {
-            diff.newValues[key] = newValue;
-          }
-        }
-      }
-    }
-
-    return diff;
   }
 
   /**
@@ -108,9 +78,11 @@ export abstract class Model extends BaseEntity {
    * Convertit l'entité pour réponse API
    */
   toApi(): Record<string, any> {
-    const result: Record<string, any> = { ...this };
-    delete result.deletedAt;
-    return result;
+    return {
+      id: (this as any).id,
+      createdAt: Model.formatISODate(this.createdAt),
+      updatedAt: Model.formatISODate(this.updatedAt),
+    };
   }
 
   /**
@@ -131,10 +103,8 @@ export abstract class Model extends BaseEntity {
       const listKeys = await redisClient.keys(listPattern);
       if (listKeys.length > 0) {
         await redisClient.del([entityKey, ...listKeys]);
-        logger.info(`Cache invalidated for ${entityName}:${this.id} and ${listKeys.length} lists`);
       } else {
         await redisClient.del(entityKey);
-        logger.info(`Cache invalidated for ${entityName}:${this.id}`);
       }
     } catch (error) {
       logger.error(`Cache invalidation failed for ${this.constructor.name}:${this.id}: ${error}`);
@@ -145,7 +115,7 @@ export abstract class Model extends BaseEntity {
    * Hooks de cycle de vie TypeORM
    */
   @BeforeInsert()
-  protected async beforeInsert(): Promise<void> {
+  protected beforeInsert(): void {
     this.createdAt = new Date();
     this.updatedAt = new Date();
   }
@@ -156,7 +126,7 @@ export abstract class Model extends BaseEntity {
   }
 
   @BeforeUpdate()
-  protected async beforeUpdate(): Promise<void> {
+  protected beforeUpdate(): void {
     this.updatedAt = new Date();
   }
 

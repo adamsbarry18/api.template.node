@@ -1,6 +1,6 @@
-#!/usr/bin/env sh
-# Exécute commitlint pour valider le message de commit
-# Nécessite que commitlint soit configuré dans le projet (ex: commitlint.config.js)
+#!/bin/sh
+# Husky commit-msg hook: validate commit message using commitlint
+# Requires commitlint to be configured in the project (e.g., commitlint.config.js)
 . "$(dirname -- "$0")/_/husky.sh"
 
 npx --no -- commitlint --edit "$1"

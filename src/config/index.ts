@@ -3,13 +3,14 @@ import path from 'path';
 import dotenv from 'dotenv';
 import { z } from 'zod';
 import 'reflect-metadata';
+import logger from '../lib/logger';
 
 // Priority: .env.development, .env.production, etc. > .env (base)
 /**
  * @description Configuration loading from .env files.
  * @priority Specific environment files (.env.development, .env.production) > base .env file.
  */
-const nodeEnv = process.env.NODE_ENV || 'development';
+const nodeEnv = process.env.NODE_ENV ?? 'development';
 const envPathSpecific = path.resolve(process.cwd(), `.env.${nodeEnv}`);
 const envPathBase = path.resolve(process.cwd(), '.env');
 
@@ -53,8 +54,7 @@ const envSchema = z
       .int()
       .positive()
       .default(60 * 60 * 24)
-      .describe('Access Token expiration in seconds (default: 1 day)'), // 1 day
-    // JWT_REFRESH_EXPIRATION_SECONDS: z.coerce.number().int().positive().default(60 * 60 * 24 * 7).describe('Refresh Token expiration in seconds (default: 7 days)'), // If using refresh tokens
+      .describe('Access Token expiration in seconds (default: 1 day)'),
     PASSWORD_EXPIRY_DAYS: z.coerce.number().int().positive().default(90),
     PASSWORD_RESET_CODE_TTL_SECONDS: z.coerce
       .number()
@@ -63,10 +63,7 @@ const envSchema = z
       .default(60 * 60 * 24 * 3), // 3 days
 
     // --- Redis ---
-    REDIS_HOST: z.string().default('localhost'),
-    REDIS_PORT: z.coerce.number().int().positive().default(6379),
-    REDIS_PASSWORD: z.string().optional(),
-    REDIS_DB: z.coerce.number().int().min(0).optional().default(0),
+    REDIS_URL: z.string().url().default('redis://localhost:6379/1'),
 
     // TTL for authorization cache
     AUTH_CACHE_TTL_SECONDS: z.coerce
@@ -93,25 +90,20 @@ const envSchema = z
     MAIL_USER: z.string().optional(),
     MAIL_PASS: z.string().optional(),
     MAIL_FROM: z.string().email().optional(),
+
+    // --- Google OAuth ---
+    GOOGLE_CLIENT_ID: z.string().optional(),
+    GOOGLE_CLIENT_SECRET: z.string().optional(),
+    GOOGLE_CALLBACK_URL: z.string().url().optional(),
   })
-  .refine(
-    (data) => {
-      if (data.NODE_ENV === 'production' && data.DB_SYNCHRONIZE === true) {
-        console.error('❌ FATAL SECURITY RISK: DB_SYNCHRONIZE cannot be true in production!');
-        return false;
-      }
-      return true;
-    },
-    { message: 'DB_SYNCHRONIZE must be false in production environment' },
-  )
   .refine((data) => {
     if (!data.API_URL && data.NODE_ENV !== 'test') {
-      console.warn(
+      logger.warn(
         '⚠️ WARNING: API_URL is not defined in .env. API Documentation links might be incorrect.',
       );
     }
     if (!data.FRONTEND_URL && data.NODE_ENV !== 'test') {
-      console.warn(
+      logger.warn(
         '⚠️ WARNING: FRONTEND_URL is not defined in .env. Email links might be incorrect.',
       );
     }
@@ -126,17 +118,17 @@ let config: z.infer<typeof envSchema>;
 
 try {
   config = envSchema.parse(process.env);
-  console.info(`[Config] Configuration loaded successfully for NODE_ENV=${config.NODE_ENV}`); // Use console here
+  // console.info(`[Config] Configuration loaded successfully for NODE_ENV=${config.NODE_ENV}`);
 } catch (error) {
   if (error instanceof z.ZodError) {
-    console.error(
+    logger.error(
       '❌ Invalid environment variables configuration:',
       JSON.stringify(error.format(), null, 2),
     );
   } else {
-    console.error('❌ Unexpected error parsing environment variables:', error);
+    logger.error('❌ Unexpected error parsing environment variables:', error);
   }
-  process.exit(1);
+  throw error;
 }
 
 export default config;

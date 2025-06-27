@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import { Entity, Column, BeforeInsert, BeforeUpdate, Unique } from 'typeorm';
 import { z } from 'zod';
 
-import { Model } from '../../../common/models/Model';
+import { Model } from '@/common/models/Model';
 
 export enum SecurityLevel {
   EXTERNAL = 1,
@@ -13,7 +13,7 @@ export enum SecurityLevel {
   NOBODY = 999,
 }
 
-export enum Action {
+export enum UserActionType {
   CREATE = 'create',
   READ = 'read',
   UPDATE = 'write',
@@ -23,9 +23,8 @@ export enum Action {
 
 export type AuthorisationRule =
   | { level: SecurityLevel; feature?: never; action?: never }
-  | { level?: never; feature: string; action: Action | string };
+  | { level?: never; feature: string; action: UserActionType | string };
 
-// CreateUserInput type and schema
 export type CreateUserInput = {
   email: string;
   password: string;
@@ -46,7 +45,6 @@ export type UpdateUserInput = Omit<Partial<CreateUserInput>, 'email'>;
 
 export const validationInputErrors: string[] = [];
 
-// UserApiResponse type (DTO)
 export type UserApiResponse = {
   id: number;
   uid: string | null;
@@ -64,16 +62,13 @@ export type UserApiResponse = {
   preferences: Record<string, any> | null;
   permissionsExpireAt: string | null;
   isActive: boolean;
-  createdTime?: Date;
-  updatedTime?: Date;
+  googleId?: string | null;
 };
 
-// Interne type for decode overrides
 export type DecodedOverrides = Map<number, number>;
 
 const BCRYPT_SALT_ROUNDS = 10;
 
-// Définition de l'enum déplacée ici
 export enum PasswordStatus {
   ACTIVE = 'ACTIVE',
   VALIDATING = 'VALIDATING',
@@ -93,10 +88,9 @@ export class User extends Model {
   @Column({ type: 'varchar', length: 100 })
   email!: string;
 
-  @Column({ type: 'varchar', length: 255, select: false })
-  password!: string;
+  @Column({ type: 'varchar', length: 255, select: false, nullable: true })
+  password?: string | null;
 
-  // Définition du nom comme obligatoire
   @Column({ type: 'varchar', length: 200, name: 'first_name' })
   firstName!: string;
 
@@ -137,6 +131,9 @@ export class User extends Model {
 
   @Column({ type: 'boolean', default: true, name: 'is_active' })
   isActive: boolean = true;
+
+  @Column({ type: 'varchar', length: 255, nullable: true, name: 'google_id' })
+  googleId: string | null = null;
 
   /**
    * Hash la valeur du password avant insertion / mise à jour dans la BDD.
@@ -184,18 +181,11 @@ export class User extends Model {
       preferences: this.preferences,
       permissionsExpireAt: Model.formatISODate(this.permissionsExpireAt),
       isActive: this.isActive,
+      googleId: this.googleId,
     };
 
     delete (res as any).password;
     return res;
-  }
-
-  /**
-   * Vérifie si l'utilisateur a des droits administrateurs.
-   * @returns {boolean} - true si le niveau de l'utilisateur est 5
-   */
-  isAdmin(): boolean {
-    return this.level === 5;
   }
 
   /**
@@ -221,14 +211,15 @@ export class User extends Model {
         .max(5, { message: 'Level must be at most 5.' }),
       password: z
         .string({ required_error: 'Password is required.' })
-        .min(1, { message: 'Password cannot be empty.' }),
+        .min(1, { message: 'Password cannot be empty.' })
+        .optional()
+        .nullable(),
       isActive: z.boolean().optional(),
     });
 
     const result = userValidationSchema.safeParse(this);
 
     if (!result.success) {
-      // Pour chaque erreur, on récupère le path (champ concerné) et le message
       validationInputErrors.length = 0;
       validationInputErrors.push(
         ...result.error.issues.map((issue) => {

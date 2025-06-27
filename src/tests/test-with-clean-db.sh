@@ -2,6 +2,7 @@
 # Bash script to ensure a clean DB for each test run (for WSL/Linux)
 # Usage: ./test-with-clean-db.sh
 
+# Exit immediately if a command exits with a non-zero status.
 set -e
 
 # Stop and remove containers/volumes
@@ -14,7 +15,7 @@ npm run test-db:start
 
 # Wait for services to be healthy (optional: adjust if needed)
 printf "[TEST] Waiting for services to be healthy...\n"
-sleep 5
+sleep 2
 
 # Run tests
 printf "[TEST] Running tests...\n"

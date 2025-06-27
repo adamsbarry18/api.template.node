@@ -5,6 +5,7 @@ import {
   IsNull,
   Not,
   type UpdateResult,
+  type FindManyOptions,
 } from 'typeorm';
 
 import { ServerError } from '@/common/errors/httpErrors';
@@ -12,21 +13,18 @@ import { appDataSource } from '@/database/data-source';
 
 import { type PasswordStatus, SecurityLevel, User } from '../models/users.entity';
 
-// Options for user search queries
 interface FindUserOptions {
   where: FindOptionsWhere<User>;
   select?: (keyof User)[];
   withDeleted?: boolean;
 }
 
-// Options for listing users
 interface FindAllUsersOptions {
   skip?: number;
   take?: number;
   where?: FindOptionsWhere<User>;
+  order?: FindManyOptions<User>['order'];
 }
-
-// Selectable fields for queries including the password hash
 const USER_WITH_PASSWORD_FIELDS: (keyof User)[] = [
   'id',
   'uid',
@@ -46,9 +44,9 @@ const USER_WITH_PASSWORD_FIELDS: (keyof User)[] = [
   'authorisationOverrides',
   'permissionsExpireAt',
   'isActive',
+  'googleId',
 ];
 
-// Repository for handling user-related database operations
 export class UserRepository {
   private readonly repository: Repository<User>;
 
@@ -117,21 +115,36 @@ export class UserRepository {
   }
 
   /**
+   * Finds an active user by their Google ID.
+   */
+  async findByGoogleId(googleId: string): Promise<User | null> {
+    return this.findOneWithOptions({ where: { googleId, deletedAt: IsNull() } });
+  }
+
+  /**
+   * Finds an active user by their email (case-insensitive), including googleId.
+   * This is useful when trying to link a Google account to an existing email.
+   */
+  async findByEmailWithGoogleId(email: string): Promise<User | null> {
+    const normalizedEmail = email.toLowerCase().trim();
+    return this.findOneWithOptions({
+      where: { email: normalizedEmail, deletedAt: IsNull() },
+      select: [...USER_WITH_PASSWORD_FIELDS, 'googleId'], // Ensure googleId is selected
+    });
+  }
+
+  /**
    * Lists all active users with pagination and filtering.
    */
   async findAll(options: FindAllUsersOptions = {}): Promise<{ users: User[]; count: number }> {
-    try {
-      const where = { ...options.where, deletedAt: IsNull() };
-      const [users, count] = await this.repository.findAndCount({
-        where,
-        order: { createdAt: 'DESC' },
-        skip: options.skip,
-        take: options.take,
-      });
-      return { users, count };
-    } catch (error) {
-      throw new ServerError(`Find all users, ${error}`);
-    }
+    const where = { ...options.where, deletedAt: IsNull() };
+    const [users, count] = await this.repository.findAndCount({
+      where,
+      order: options.order ?? { createdAt: 'DESC' },
+      skip: options.skip,
+      take: options.take,
+    });
+    return { users, count };
   }
 
   /**
@@ -195,7 +208,6 @@ export class UserRepository {
           ? { id: criteria, deletedAt: IsNull() }
           : { ...criteria, deletedAt: IsNull() };
 
-      // Security: prevent updating sensitive fields directly via this method
       const safeDto = { ...dto };
       delete safeDto.email;
       delete safeDto.uid;

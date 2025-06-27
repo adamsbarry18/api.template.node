@@ -1,10 +1,16 @@
 import passport from 'passport';
+import type { User as UserEntity } from '@/modules/users/models/users.entity';
 import {
   Strategy as JwtStrategy,
   ExtractJwt,
-  type StrategyOptions,
-  type VerifiedCallback,
+  type StrategyOptions as JwtStrategyOptions,
+  type VerifiedCallback as JwtVerifiedCallback,
 } from 'passport-jwt';
+import {
+  Strategy as GoogleStrategy,
+  type Profile as GoogleProfile,
+  type VerifyCallback as GoogleVerifyCallback,
+} from 'passport-google-oauth20';
 import { type AnyZodObject, ZodError } from 'zod';
 
 import {
@@ -15,24 +21,20 @@ import {
   ServerError,
   BaseError,
 } from '@/common/errors/httpErrors';
-import { type CustomJwtPayload } from '@/common/types';
+import type { CustomJwtPayload } from '@/common/types';
 import config from '@/config';
-import {
-  type NextFunction,
-  type Request,
-  type Response,
-  type AuthenticatedUser,
-} from '@/config/http';
+import type { NextFunction, Request, Response, AuthenticatedUser } from '@/config/http';
 import logger from '@/lib/logger';
 import { AuthorizationService } from '@/modules/auth/services/authorization.service';
 import { LoginService } from '@/modules/auth/services/login.services';
 import { UsersService } from '@/modules/users/services/users.services';
+import { Service } from '@/common/utils/Service';
 
-type StrategyOptionsWithRequest = StrategyOptions & {
+type JwtStrategyOptionsWithRequest = JwtStrategyOptions & {
   passReqToCallback: true;
 };
 
-const options: StrategyOptionsWithRequest = {
+const jwtOptions: JwtStrategyOptionsWithRequest = {
   jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
   secretOrKey: config.JWT_SECRET,
   passReqToCallback: true,
@@ -42,93 +44,150 @@ const loginService = LoginService.getInstance();
 const userService = UsersService.getInstance();
 const authorizationService = AuthorizationService.getInstance();
 
-// Use a standard function declaration for export
 export function passportAuthenticationMiddleware(): void {
+  // JWT Strategy
   passport.use(
-    new JwtStrategy(options, (req: Request, payload: CustomJwtPayload, done: VerifiedCallback) => {
-      const verify = async (): Promise<void> => {
-        const rawToken = ExtractJwt.fromAuthHeaderAsBearerToken()(req);
-        if (!rawToken) {
-          done(null, false, { message: 'No Bearer token provided.' });
-          return;
-        }
-        try {
-          if (await loginService.isTokenInvalidated(rawToken)) {
-            done(null, false, { message: 'Token invalidated or expired.' });
+    new JwtStrategy(
+      jwtOptions,
+      (req: Request, payload: CustomJwtPayload, done: JwtVerifiedCallback) => {
+        const verify = async (): Promise<void> => {
+          const rawToken = ExtractJwt.fromAuthHeaderAsBearerToken()(req);
+          if (!rawToken) {
+            done(null, false, { message: 'No Bearer token provided.' });
             return;
           }
-
-          const userId = payload.sub;
-          if (!userId || typeof userId !== 'number') {
-            done(null, false, { message: 'Invalid token payload structure.' });
-            return;
-          }
-          const user = await userService.findById(userId);
-
-          if (!user) {
-            logger.warn(`User not found (ID: ${userId}) for active token. Invalidating token.`);
-            try {
-              await loginService.logout(rawToken);
-            } catch (err) {
-              logger.error(err, 'Error during automatic token logout for non-existent user.');
+          try {
+            if (await loginService.isTokenInvalidated(rawToken)) {
+              done(null, false, { message: 'Token invalidated or expired.' });
+              return;
             }
-            done(null, false, { message: 'User not found.' });
-            return;
-          }
 
-          if (!user.isActive) {
-            logger.warn(
-              `Authentication attempt for inactive user ID: ${userId} (${user.email}). Invalidating token.`,
-            );
-            try {
-              await loginService.logout(rawToken);
-            } catch (err) {
-              logger.error(err, 'Error during automatic token logout for inactive user.');
+            const userId = payload.sub;
+            if (!userId || typeof userId !== 'number') {
+              done(null, false, { message: 'Invalid token payload structure.' });
+              return;
             }
-            done(null, false, { message: 'Account is inactive.' });
-            return;
-          }
+            const userApiResponse = await userService.findById(userId);
 
-          if (
-            user.permissionsExpireAt &&
-            new Date(user.permissionsExpireAt).getTime() < Date.now()
-          ) {
-            logger.warn(
-              `Authentication attempt for user ID: ${userId} (${user.email}) whose permissions have expired on ${user.permissionsExpireAt}. Invalidating token.`,
-            );
-            try {
-              await loginService.logout(rawToken);
-            } catch (err) {
-              logger.error(err, 'Error during automatic token logout for expired permissions.');
+            if (!userApiResponse) {
+              try {
+                await loginService.logout(rawToken);
+              } catch (err) {
+                logger.error(err, 'Error during automatic token logout for non-existent user.');
+              }
+              done(null, false, { message: 'User not found.' });
+              return;
             }
-            done(null, false, { message: 'Account permissions have expired.' });
-            return;
-          }
-          const authenticatedUser = {
-            ...user,
-            id: userId,
-            sub: userId,
-            authToken: rawToken,
-          };
-          done(null, authenticatedUser);
-        } catch (error) {
-          if (error instanceof ServiceUnavailableError) {
-            done(error, false);
-          } else {
-            logger.error(error, 'Unexpected error during JWT strategy execution.');
-            done(error, false);
-          }
-        }
-      };
 
-      verify().catch((err) => {
-        logger.error(err, 'Unhandled error in JWT strategy verify function.');
-        done(err, false);
-      });
-    }),
+            if (!userApiResponse.isActive) {
+              try {
+                await loginService.logout(rawToken);
+              } catch (err) {
+                logger.error(err, 'Error during automatic token logout for inactive user.');
+              }
+              done(null, false, { message: 'Account is inactive.' });
+              return;
+            }
+
+            if (
+              userApiResponse.permissionsExpireAt &&
+              new Date(userApiResponse.permissionsExpireAt).getTime() < Date.now()
+            ) {
+              try {
+                await loginService.logout(rawToken);
+              } catch (err) {
+                logger.error(err, 'Error during automatic token logout for expired permissions.');
+              }
+              done(null, false, { message: 'Account permissions have expired.' });
+              return;
+            }
+            const authenticatedUser: AuthenticatedUser = {
+              ...(userApiResponse as any),
+              id: userId,
+              sub: userId,
+              authToken: rawToken,
+            };
+            done(null, authenticatedUser);
+          } catch (error) {
+            if (error instanceof ServiceUnavailableError) {
+              done(error, false);
+            } else {
+              logger.error(error, 'Unexpected error during JWT strategy execution.');
+              done(error, false);
+            }
+          }
+        };
+
+        verify().catch((err) => {
+          logger.error(err, 'Unhandled error in JWT strategy verify function.');
+          done(err, false);
+        });
+      },
+    ),
   );
 
-  logger.info('Passport JWT strategy configured (token + Redis invalidation check).');
+  // Google OAuth2.0 Strategy
+  if (config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET && config.GOOGLE_CALLBACK_URL) {
+    passport.use(
+      new GoogleStrategy(
+        {
+          clientID: config.GOOGLE_CLIENT_ID,
+          clientSecret: config.GOOGLE_CLIENT_SECRET,
+          callbackURL: config.GOOGLE_CALLBACK_URL,
+        },
+        // Outer callback function is synchronous and returns void
+        (
+          _accessToken: string,
+          _refreshToken: string | undefined,
+          profile: GoogleProfile,
+          done: GoogleVerifyCallback,
+        ): void => {
+          // Inner async function to handle the promise-based logic
+          const processGoogleAuth = async () => {
+            try {
+              logger.info(
+                { googleProfileId: profile.id, email: profile.emails?.[0]?.value },
+                'Google OAuth: Profile received',
+              );
+
+              const userEntityInstance: UserEntity =
+                await userService.findOrCreateByGoogleProfile(profile);
+
+              if (!userEntityInstance?.id) {
+                logger.error(
+                  'findOrCreateByGoogleProfile did not return a valid user entity with an ID.',
+                );
+                done(
+                  new ServerError('Failed to process user profile after Google authentication.'),
+                  false,
+                );
+                return;
+              }
+
+              const authenticatedUser = userEntityInstance as AuthenticatedUser;
+              authenticatedUser.sub = userEntityInstance.id;
+
+              done(null, authenticatedUser);
+            } catch (error) {
+              logger.error(
+                error,
+                'Error in Google OAuth strategy during findOrCreateByGoogleProfile',
+              );
+              if (error instanceof BaseError) {
+                done(error, false);
+              } else {
+                done(
+                  new ServerError('An unexpected error occurred during Google authentication.'),
+                  false,
+                );
+              }
+            }
+          };
+          void processGoogleAuth();
+        },
+      ),
+    );
+  }
 }
 
 /**
@@ -136,6 +195,7 @@ export function passportAuthenticationMiddleware(): void {
  * Ensures the request is authenticated via JWT. Attaches the user object to `req.user`.
  */
 export const requireAuth = (req: Request, res: Response, next: NextFunction): void => {
+  // eslint-disable-next-line
   passport.authenticate(
     'jwt',
     { session: false },
@@ -146,12 +206,12 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction): vo
         return next(new ServerError('Authentication processing error.'));
       }
       if (!user) {
-        const message = info?.message || 'Unauthorized access';
+        const message = info?.message ?? 'Unauthorized access';
         logger.warn(`JWT Authentication failed: ${message}. URL: ${req.originalUrl}`);
         return next(new UnauthorizedError(message));
       }
       req.user = user;
-      logger.debug(`User ${req.user.id} authenticated. URL: ${req.originalUrl}`);
+      Service.setUser(user);
       next();
     },
   )(req, res, next);
@@ -169,15 +229,13 @@ export const requireLevel =
       logger.error('requireLevel called without prior authentication (req.user missing).');
       return next(new UnauthorizedError('Authentication context missing.'));
     }
-    if (req.user.level < requiredLevel) {
+    const userLevel = typeof req.user.level === 'number' ? req.user.level : 0;
+    if (userLevel < requiredLevel) {
       logger.warn(
-        `Access denied for user ${req.user.id}: insufficient level (${req.user.level}). Required: ${requiredLevel}. URL: ${req.originalUrl}`,
+        `Access denied for user ${req.user.id}: insufficient level (${userLevel}). Required: ${requiredLevel}. URL: ${req.originalUrl}`,
       );
       return next(new ForbiddenError(`Insufficient security level. Required: ${requiredLevel}.`));
     }
-    logger.debug(
-      `Level check successful for user ${req.user.id} (Level ${req.user.level} >= Required ${requiredLevel}).`,
-    );
     next();
   };
 
@@ -208,7 +266,6 @@ export const requirePermission =
         );
         return next(new ForbiddenError(`Required permission: ${featureName}:${actionName}`));
       }
-      logger.debug(`Permission ${featureName}:${actionName} granted for user ${req.user.id}.`);
       next();
     } catch (error) {
       logger.error(
@@ -259,15 +316,14 @@ export const validateRequest =
  */
 export const requireInternalUser = (req: Request, res: Response, next: NextFunction): void => {
   if (!req.user) {
-    logger.warn('Internal route access denied: not authenticated.');
     return next(new UnauthorizedError('Authentication required for internal route.'));
   }
-  if (!req.user.internal) {
+  const isInternal = typeof req.user.internal === 'boolean' ? req.user.internal : false;
+  if (!isInternal) {
     logger.warn(
       `Internal route access denied for user ${req.user.id}: not internal. URL: ${req.originalUrl}`,
     );
     return next(new ForbiddenError('Internal access only.'));
   }
-  logger.debug(`Internal route access granted for user ${req.user.id}.`);
   next();
 };

@@ -1,4 +1,5 @@
 #!/bin/bash
-set -e
-echo "==> Arrêt et suppression des containers"
+set -euo pipefail
+
+echo "==> Stopping and removing containers and volumes..."
 docker-compose down -v

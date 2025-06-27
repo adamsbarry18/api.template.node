@@ -40,7 +40,6 @@ export function registerRoutes(
   const routes = globalMetadataStorage.getRoutesForTarget(controllerClass); // Updated reference
 
   if (!routes || routes.length === 0) {
-    logger.debug(`No routes defined with decorators found for controller ${controllerClass.name}`); // Updated reference
     return;
   }
 

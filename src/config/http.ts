@@ -11,6 +11,7 @@ import {
 import type express from 'express';
 
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     /**
      * @interface User

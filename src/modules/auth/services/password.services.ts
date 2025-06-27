@@ -17,7 +17,7 @@ import { getRedisClient, redisClient } from '@/lib/redis';
 import { renderTemplate } from '@/locales/emails';
 
 import { UserRepository } from '../../users/data/users.repository';
-import { type User, PasswordStatus } from '../../users/models/users.entity';
+import { type User, PasswordStatus } from '@/modules/users/models/users.entity';
 
 const CONFIRM_CODE_EXPIRE_SECONDS = 60 * 60 * 24 * 3; // 3 days
 const BCRYPT_SALT_ROUNDS = 10;
@@ -103,7 +103,7 @@ export class PasswordService {
     try {
       const code = nanoid(32);
       let url = referer;
-      if (url && url.endsWith('/')) url = url.substring(0, url.length - 1);
+      if (url?.endsWith('/')) url = url.substring(0, url.length - 1);
       if (!url) url = config.FRONTEND_URL || 'http://localhost:8080';
       await redis.setEx(
         `api:users:confirm-password:${code}`,
@@ -119,7 +119,6 @@ export class PasswordService {
         { url: confirmationUrl },
         language,
       );
-      logger.info(`Sending password confirmation email to ${user.email} in language: ${language}`);
       await sendMail({ to: user.email, subject, html });
     } catch (error) {
       logger.error(error, `Failed to send password confirmation email to ${user.email}`);
@@ -140,7 +139,6 @@ export class PasswordService {
   ): Promise<void> {
     const user = await this.userRepository.findByEmail(email);
     if (!user) {
-      logger.warn(`Password reset requested for unknown email: ${email}. No email sent.`);
       throw new UnauthorizedError(`Not found or Invalid email ${email}. No email sent`);
     }
 
@@ -153,7 +151,7 @@ export class PasswordService {
     try {
       const code = nanoid(32);
       let url = referer;
-      if (url && url.endsWith('/')) url = url.substring(0, url.length - 1);
+      if (url?.endsWith('/')) url = url.substring(0, url.length - 1);
       if (!url) url = config.FRONTEND_URL || 'http://localhost:8080';
       await redis.setEx(
         `api:users:reset-password:${code}`,
@@ -169,7 +167,6 @@ export class PasswordService {
         { url: resetUrl },
         lang,
       );
-      logger.info(`Sending password reset email to ${user.email} in language: ${lang}`);
       await sendMail({ to: user.email, subject, html });
     } catch (error) {
       logger.error(error, `Failed to send password reset email to ${user.email}`);
@@ -206,18 +203,12 @@ export class PasswordService {
       throw new NotFoundError('User not found during password confirmation.');
     }
 
-    logger.info(`[confirmPasswordChange] Attempting to delete Redis key: ${redisKey}`);
     try {
-      const delResult = await redis.del(redisKey);
-      logger.info(
-        `[confirmPasswordChange] Redis key deletion attempted for: ${redisKey}. Result: ${delResult}`,
-      );
+      await redis.del(redisKey);
     } catch (delError) {
       logger.error(delError, `[confirmPasswordChange] Failed to delete Redis key: ${redisKey}`);
     }
     await this.userRepository.updatePasswordStatus(userId, PasswordStatus.ACTIVE);
-
-    logger.info(`Password status confirmed (activated) for user ${userId}`);
     return true;
   }
 
@@ -276,16 +267,11 @@ export class PasswordService {
         throw new NotFoundError('User not found during password reset update.');
       }
 
-      logger.info(`[resetPasswordWithCode] Attempting to delete Redis key: ${redisKey}`);
       try {
-        const delResult = await redis.del(redisKey);
-        logger.info(
-          `[resetPasswordWithCode] Redis key deletion attempted for: ${redisKey}. Result: ${delResult}`,
-        );
+        await redis.del(redisKey);
       } catch (delError) {
         logger.error(delError, `[resetPasswordWithCode] Failed to delete Redis key: ${redisKey}`);
       }
-      logger.info(`Password reset successful for user ${userId}`);
       return true;
     } catch (error) {
       logger.error(error, `Error resetting password for user ${userId}`);
@@ -311,8 +297,6 @@ export class PasswordService {
         logger.warn(
           `Attempted to update password status to ${status} for user ${userId}, but user was not found or no change was needed.`,
         );
-      } else {
-        logger.info(`Password status updated to ${status} for user ${userId}.`);
       }
     } catch (error) {
       logger.error(error, `Failed to update password status to ${status} for user ${userId}`);
@@ -359,10 +343,6 @@ export class PasswordService {
     await this.userRepository.updatePasswordAndStatus(user.id, hashedPassword, newStatus);
     if (sendConfirmationEmail) {
       await this.sendPasswordConfirmationEmail(user, referer);
-    } else {
-      logger.info(
-        `Password updated directly to ACTIVE for user ${user.id}. No confirmation email sent.`,
-      );
     }
 
     return true;

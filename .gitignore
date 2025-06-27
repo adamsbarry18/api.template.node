@@ -8,6 +8,7 @@ pids
 *.pid
 *.seed
 *.pid.lock
+config.yml
 
 # Dependency directories
 node_modules/
@@ -49,3 +50,5 @@ coverage
 
 # Vitest cache
 .vitest-cache.*
+.vitest/cache
+.vercel

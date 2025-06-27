@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: CI/CD Azure via GHCR
 
 on:
   push:
@@ -67,14 +67,12 @@ jobs:
   build-and-push-docker:
     name: Build and Push Docker Image
     runs-on: ubuntu-latest
-    # Ne s'exécute que sur push vers 'main' et après succès du job 'test'
     if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') && github.event_name == 'push'
     needs: test
 
-    # Accorde les permissions nécessaires pour lire le contenu et écrire des packages (images Docker)
     permissions:
-      contents: read # Nécessaire pour actions/checkout
-      packages: write # Nécessaire pour pusher vers GHCR
+      contents: read
+      packages: write
 
     steps:
       - name: Checkout repository
@@ -90,17 +88,14 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          # Utilise le token fourni automatiquement par GitHub Actions
-          username: ${{ github.actor }} # L'utilisateur qui a déclenché le workflow
+          username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          # Construit le nom de l'image pour GHCR: ghcr.io/owner/repo
-          # Vous pouvez ajouter un nom d'image spécifique si besoin: ghcr.io/${{ github.repository }}/api
-          images: ghcr.io/${{ github.repository }} # Ex: ghcr.io/adamsbarry18/api.template.node
+          images: ghcr.io/adamsbarry18/innov-stocker-app
           tags: |
             type=sha,prefix=,suffix=,format=short
             type=raw,value=latest,enable={{is_default_branch}}
@@ -116,29 +111,20 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ===========================================
-  # Job: Deploy (Manual Trigger)
+  # Job: Deploy to vercel
   # ===========================================
-  deploy:
-    name: Deploy Application
+  deploy-webapp:
+    name: Deploy to Azure Web App
     runs-on: ubuntu-latest
-    # Ne s'exécute que sur déclenchement manuel ('workflow_dispatch')
-    # et après succès du job 'build-and-push-docker' (donc implicitement sur 'main')
-    if: github.event_name == 'workflow_dispatch'
     needs: build-and-push-docker
-
-    environment: production # Optionnel: Définit un environnement pour les secrets/règles
-
+    if: github.ref == 'refs/heads/main'
     steps:
-      - name: Checkout repository (si nécessaire pour les scripts de déploiement)
-        uses: actions/checkout@v4
+      - name: Azure Login
+        uses: azure/login@v1
         with:
-          ref: main # Assurez-vous de déployer depuis main
-
-      - name: Placeholder for Deployment Steps
-        run: |
-          echo "Deployment triggered manually for branch: ${{ github.ref }}"
-          echo "Image to deploy (example): ghcr.io/${{ github.repository }}:latest" # Nom d'image GHCR
-          echo "Add your deployment steps here (e.g., SSH, kubectl, serverless deploy, etc.)"
-          # Exemple:
-          # ssh user@your-server "docker pull your-image:latest && docker stop your-container && docker rm your-container && docker run -d --name your-container your-image:latest"
-          # kubectl set image deployment/your-deployment your-container=your-image:latest -n your-namespace
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+          images: ghcr.io/${{ github.repository_owner }}/innov-stocker-app:latest
