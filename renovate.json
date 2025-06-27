@@ -1,28 +1,47 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", "schedule:weekly", "group:recommended"],
+  "extends": [
+    "config:recommended",
+    "schedule:weekly",
+    "group:recommended"
+  ],
   "packageRules": [
     {
-      "description": "Automerge patch updates if CI passes",
-      "matchUpdateTypes": ["patch"],
-      "automerge": true,
-      "automergeType": "squash",
-      "ignoreTests": true,
-      "labels": ["dependencies", "renovate", "automerge"]
+      "description": "Manual review required for patch updates",
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "automerge": false,
+      "labels": [
+        "dependencies",
+        "renovate",
+        "patch"
+      ]
     },
     {
-      "description": "Automerge minor updates if CI passes",
-      "matchUpdateTypes": ["minor"],
-      "automerge": true,
-      "automergeType": "squash",
-      "ignoreTests": true,
-      "labels": ["dependencies", "renovate", "automerge"]
+      "description": "Manual review required for minor updates",
+      "matchUpdateTypes": [
+        "minor"
+      ],
+      "automerge": false,
+      "labels": [
+        "dependencies",
+        "renovate",
+        "minor"
+      ]
     },
     {
       "description": "Group all non-npm updates (docker, actions, etc.)",
-      "matchDatasources": ["docker", "github-action"],
+      "matchDatasources": [
+        "docker",
+        "github-action"
+      ],
       "groupName": "non-npm-dependencies",
-      "labels": ["dependencies", "renovate", "non-npm"],
+      "labels": [
+        "dependencies",
+        "renovate",
+        "non-npm"
+      ],
       "automerge": false
     },
     {
@@ -36,16 +55,31 @@
         "pg",
         "pg-hstore"
       ],
-      "matchUpdateTypes": ["major"],
+      "matchUpdateTypes": [
+        "major"
+      ],
       "groupName": "core-backend-major",
-      "labels": ["dependencies", "renovate", "major", "backend-core"],
+      "labels": [
+        "dependencies",
+        "renovate",
+        "major",
+        "backend-core"
+      ],
       "automerge": false
     },
     {
       "description": "Add dependencies and renovate labels to all other major PRs",
-      "labels": ["dependencies", "renovate", "major"],
-      "matchUpdateTypes": ["major"],
-      "matchDatasources": ["npm"],
+      "labels": [
+        "dependencies",
+        "renovate",
+        "major"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "matchDatasources": [
+        "npm"
+      ],
       "matchPackageNames": [
         "!node",
         "!@types/node",
@@ -54,7 +88,8 @@
         "!mysql2",
         "!pg",
         "!pg-hstore"
-      ]
+      ],
+      "automerge": false
     }
   ],
   "prConcurrentLimit": 10,
