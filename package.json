@@ -14,6 +14,7 @@
     "test:coverage": "cross-env NODE_ENV=test dotenv -e .env.test vitest run --coverage --color",
     "test:local": "cross-env NODE_ENV=development dotenv -e .env.development vitest run --color",
     "test": "cross-env NODE_ENV=test dotenv -e .env.test vitest run --color",
+    "test:ci": "cross-env NODE_ENV=test vitest run --color",
     "test-db:start": "docker compose -f src/tests/docker-compose.yml up --build -d",
     "test-db:stop": "docker compose -f src/tests/docker-compose.yml down -v",
     "test:all": "bash ./src/tests/test-with-clean-db.sh",

@@ -26,12 +26,12 @@ jobs:
       PORT: 8000
       DB_TYPE: mysql
       DB_HOST: localhost
-      DB_PORT: 3306
+      DB_PORT: 3307
       DB_USERNAME: test_user
-      DB_PASSWORD: test_password
+      DB_PASSWORD: test_pwd
       DB_NAME: test_db
       JWT_SECRET: test_jwt_secret_key_for_ci_pipeline_only
-      REDIS_URL: redis://localhost:6379
+      REDIS_URL: redis://localhost:6380
       GOOGLE_CLIENT_ID: test_google_client_id
       GOOGLE_CLIENT_SECRET: test_google_client_secret
       GOOGLE_CALLBACK_URL: http://localhost:8000/api/v1/auth/google/callback
@@ -73,9 +73,29 @@ jobs:
       - name: Wait for services to stabilize
         run: sleep 10s
 
+      - name: Verify database connection
+        run: |
+          echo "Testing MySQL connection..."
+          docker exec mysql-test mysql -u test_user -ptest_pwd -e "SELECT 1;" test_db
+          echo "MySQL is ready!"
+
+      - name: Verify Redis connection
+        run: |
+          echo "Testing Redis connection..."
+          docker exec redis-test redis-cli ping
+          echo "Redis is ready!"
+
+      - name: Initialize database with test data
+        run: |
+          echo "Initializing database with test data..."
+          docker exec mysql-test mysql -u test_user -ptest_pwd test_db < src/tests/db-data/0-grant-permission.sql
+          docker exec mysql-test mysql -u test_user -ptest_pwd test_db < src/tests/db-data/1-schema.sql
+          docker exec mysql-test mysql -u test_user -ptest_pwd test_db < src/tests/db-data/2-datas.sql
+          echo "Database initialized!"
+
       - name: Run tests
-        # npm test utilise 'dotenv -e .env.test', mais les variables d'environnement du job ont priorité
-        run: npm test
+        # Utilise le script test:ci qui n'utilise pas dotenv-cli
+        run: npm run test:ci
 
       - name: Stop test services
         if: always()
