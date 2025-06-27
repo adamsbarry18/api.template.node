@@ -1,5 +1,5 @@
-import { resolve } from 'path';
-import { pathToFileURL } from 'url';
+import { resolve, dirname } from 'path';
+import { pathToFileURL, fileURLToPath } from 'url';
 
 import { Router } from 'express';
 import { glob } from 'glob'; // Use async import
@@ -7,9 +7,13 @@ import { glob } from 'glob'; // Use async import
 import { registerRoutes } from '../common/routing/register';
 import logger from '../lib/logger';
 
-const isProd = process.env.NODE_ENV === 'production' || __dirname.includes('dist');
+// Get current directory for ES modules compatibility
+const currentFilename = fileURLToPath(import.meta.url);
+const currentDirname = dirname(currentFilename);
+
+const isProd = process.env.NODE_ENV === 'production' || currentDirname.includes('dist');
 const modulesPath = isProd
-  ? resolve(__dirname, '../modules')
+  ? resolve(currentDirname, '../modules')
   : resolve(process.cwd(), 'src/modules');
 const globPattern = resolve(modulesPath, `**/*.routes.${isProd ? 'js' : 'ts'}`).replace(/\\/g, '/');
 
